@@ -11,9 +11,11 @@ import Settings from "./pages/Settings";
 import MoodCheckIn from "./pages/MoodCheckIn";
 import Goals from "./pages/Goals";
 import BioGuide from "./pages/BioGuide";
+import SoundTherapy from "./pages/SoundTherapy";
 
 import ProtectedRoute from "./components/ProtectedRoutes";
 import DashboardLayout from "./components/layout/DashboardLayout";
+
 
 function App() {
   return (
@@ -45,6 +47,8 @@ function App() {
 
           {/* Daily Goals */}
           <Route path="/goals" element={<Goals />} />
+         
+          <Route path="/sound-therapy" element={<SoundTherapy />} />
 
           {/* AI Bio Guide */}
           <Route path="/bio-guide" element={<BioGuide />} />

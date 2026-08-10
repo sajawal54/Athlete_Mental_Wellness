@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "apps.accounts",
 "apps.moods",
 "apps.goals",
+"apps.sound_therapy",
 "apps.bio_guide",
     "rest_framework",
     "rest_framework_simplejwt",

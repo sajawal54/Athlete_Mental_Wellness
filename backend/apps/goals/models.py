@@ -1,8 +1,6 @@
 from django.db import models
 from django.conf import settings
 
-
-
 class DailyGoal(models.Model):
   CATEGORY_CHOICES = [("Mindfulness" , "Mindfulness") , ("Recovery" , "Recovery") , ("Physical" , "Physical") , ("Reflection" , "Reflection")]
   
