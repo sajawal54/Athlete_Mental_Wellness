@@ -4,11 +4,25 @@ const API = axios.create({
   baseURL: "http://127.0.0.1:8000/api/auth/",
 });
 
+// Request Interceptor to attach Bearer token automatically
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Register User
 export const registerUser = async (userData) => {
   const response = await API.post("register/", userData);
   return response.data;
-};
+};  
 
 // Login User
 export const loginUser = async (userData) => {
@@ -18,17 +32,13 @@ export const loginUser = async (userData) => {
 
 // Forgot Password
 export const forgotPassword = async (email) => {
-  const response = await API.post("password-reset/", {
-    email,
-  });
-
+  const response = await API.post("password-reset/", { email });
   return response.data;
 };
 
 // Reset Password
 export const resetPassword = async (data) => {
   const response = await API.post("password-reset-confirm/", data);
-
   return response.data;
 };
 

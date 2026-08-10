@@ -76,7 +76,7 @@ function Login() {
                   size={20}
                 />
                 <input
-                  {...register("username", {
+                  {...register("email", {
                     required: "Email is required",
                   })}
                   placeholder="Enter Email"

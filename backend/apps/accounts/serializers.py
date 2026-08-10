@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
 
 User = get_user_model()
-
 class RegisterSerializer(serializers.ModelSerializer):
   
   password = serializers.CharField(write_only = True)
@@ -20,19 +19,19 @@ class RegisterSerializer(serializers.ModelSerializer):
   
 
 class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
+    email = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
     def validate(self, data):
-        username = data.get('username')
+        email = data.get('email')
         password = data.get('password')
 
-        if username and password:
-            user = authenticate(username=username, password=password)
+        if email and password:
+            user = authenticate(username=email, password=password)
             if not user:
-                raise serializers.ValidationError("Invalid credentials or inactive account.")
+                raise serializers.ValidationError("Invalid email or password.")
         else:
-            raise serializers.ValidationError("Must include 'username' and 'password'.")
+            raise serializers.ValidationError("Must include 'email' and 'password'.")
 
         data['user'] = user
         return data

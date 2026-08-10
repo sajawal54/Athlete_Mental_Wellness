@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework import generics , permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.response import Response
@@ -10,9 +9,48 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
+from rest_framework.permissions import IsAuthenticated
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from django.conf import settings
 User = get_user_model()
 
+class UserProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "username": user.username,
+            "email": user.email,
+            "is_counselor": getattr(user, 'is_counselor', False)
+        })
+    def put(self, request):
+        user = request.user
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if username:
+            user.username = username
+
+        if password:
+            user.set_password(password)
+
+        try:
+            user.save()
+        except Exception as e:
+            # Agar database mein username unique hone ki wajah se error aaye
+            return Response(
+                {"detail": "This username already taken. Please choose a slightly different variation (e.g., adding a number)."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return Response({
+            "message": "Profile updated successfully",
+            "username": user.username,
+            "email": user.email,
+            "is_counselor": getattr(user, 'is_counselor', False)
+        }, status=status.HTTP_200_OK)
 
 class RegisterAPIView(generics.CreateAPIView):
   queryset = User.objects.all()
@@ -40,11 +78,14 @@ class LoginAPIView(APIView):
 class ForgotPasswordAPIView(APIView):
     def post(self, request):
         email = request.data.get('email')
+      
         if not email:
             return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             user = User.objects.get(email=email)
+            
+            
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             
@@ -53,15 +94,24 @@ class ForgotPasswordAPIView(APIView):
             
            
             subject = 'Password Reset Request - Athlete Mental Wellness'
-            message = f"Hi {user.username},\n\nYou requested a password reset. Click the link below to reset your password:\n\n{reset_link}\n\nIf you didn't request this, please ignore this email."
+            html_message = render_to_string(
+    "emails/password-reset.html",
+    {
+        "username": user.username,
+        "reset_link": reset_link,
+    },
+)
             
+            plain_message = strip_tags(html_message)
+
             send_mail(
-                subject,
-                message,
-            settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+    subject=subject,
+    message=plain_message,
+    from_email=settings.DEFAULT_FROM_EMAIL,
+    recipient_list=[user.email],
+    html_message=html_message,
+    fail_silently=False,
+)
         except User.DoesNotExist:
             pass
 
@@ -82,7 +132,6 @@ class ResetPasswordAPIView(APIView):
             user = User.objects.get(pk=user_pk)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             user = None
-
 
         # Token verify karna
         if user is not None and default_token_generator.check_token(user, token):

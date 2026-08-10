@@ -22,7 +22,7 @@ function ForgotPassword() {
 
         try {
 
-            const response = await forgotPassword(data);
+            const response = await forgotPassword(data.email);
 
             toast.success(response.detail);
 
