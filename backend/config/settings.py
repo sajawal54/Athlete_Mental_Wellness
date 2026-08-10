@@ -24,6 +24,8 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     "apps.accounts",
 "apps.moods",
+"apps.goals",
+"apps.bio_guide",
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
@@ -162,5 +164,10 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
+
+STATIC_URL = 'static/'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media' 
 
 CORS_ALLOW_ALL_ORIGINS = True

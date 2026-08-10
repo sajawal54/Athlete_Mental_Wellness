@@ -7,6 +7,7 @@ import {
   SparklesIcon, 
   BookOpenIcon, 
   TrophyIcon, 
+  CheckBadgeIcon, // 👈 Goals ke liye naya icon
   StarIcon, 
   ChartBarIcon, 
   ShieldExclamationIcon, 
@@ -18,15 +19,15 @@ import {
 export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
   const location = useLocation();
 
-  // Navigation items mapping
+  // Navigation items mapping - Daily Goals alag add kar diya
   const navigationItems = [
-    { name: 'Dashboard', path: '/', icon: HomeIcon },
-    // Path updated to /mood-checkin to sync with your Mood Check-In component
+    { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
     { name: 'Mood Tracker', path: '/mood-checkin', icon: FaceSmileIcon },
+    { name: 'Daily Goals', path: '/goals', icon: CheckBadgeIcon },
     { name: 'Sound Therapy', path: '/sound-therapy', icon: MusicalNoteIcon },
-    { name: 'AI Bio Guide', path: '/ai-guide', icon: SparklesIcon },
+    { name: 'AI Bio Guide', path: '/bio-guide', icon: SparklesIcon },
+     { name: 'Gamification', path: '/gamification', icon: TrophyIcon },
     { name: 'Wellness Modules', path: '/modules', icon: BookOpenIcon },
-    { name: 'Gamification & Goals', path: '/goals', icon: TrophyIcon },
     { name: 'Trophy Room', path: '/trophy-room', icon: StarIcon },
     { name: 'Progress Analytics', path: '/progress', icon: ChartBarIcon },
     { name: 'Emergency Support', path: '/support', icon: ShieldExclamationIcon },
@@ -117,7 +118,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
         </div>
 
         {/* Role-Aware & System Status Footer */}
-        <div className="p-3.5 border-t border-slate-800/80 m-3 bg-slate-900/60 rounded-2xl border ">
+        <div className="p-3.5 border-t border-slate-800/80 m-3 bg-slate-900/60 rounded-2xl border">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
               <ShieldCheckIcon className="w-4 h-4" />

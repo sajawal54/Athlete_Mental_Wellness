@@ -1,18 +1,50 @@
-from django.contrib.auth.models import AbstractUser
+import os
 from django.db import models
+from django.conf  import settings
+from django.contrib.auth.models import AbstractUser
 
+def profile_pic_path(instance, filename):
+    # Safe filename upload path
+    ext = filename.split('.')[-1]
+    filename = f"user_{instance.user.id}_avatar.{ext}"
+    return os.path.join('profile_pics/', filename)
 
 class User(AbstractUser):
-  
-  
-  
-  email = models.EmailField(unique=True)
-  is_counselor = models.BooleanField(default=False)
-  
-  
-  USERNAME_FIELD = "email"
-  REQUIRED_FIELDS = ["username"]
-  
-  
-  def __str__(self):
-    return self.email
+    email = models.EmailField(unique=True)
+    is_counselor = models.BooleanField(default=False)
+    
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
+    
+    def __str__(self):
+        return self.email
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    
+    # 1. Profile Picture
+    avatar = models.ImageField(upload_to=profile_pic_path, null=True, blank=True)
+    
+    # 2. Athlete Personal & Sport Details
+    sport = models.CharField(max_length=100, default='Football', blank=True)
+    team = models.CharField(max_length=100, default='University Varsity', blank=True)
+    position = models.CharField(max_length=100, default='Midfielder', blank=True)
+    personal_goals = models.TextField(blank=True, default='Improve mental resilience and maintain daily focus targets.')
+    preferences = models.CharField(max_length=255, blank=True, default='Morning Workouts, Mindful Breathing')
+    
+    
+    age = models.PositiveIntegerField(null=True, blank=True)
+    phone_number = models.CharField(max_length=20, null=True, blank=True)
+    
+
+    # 3. Settings - Notifications, Theme, Privacy
+    email_notifications = models.BooleanField(default=True)
+    reminder_notifications = models.BooleanField(default=True)
+    theme_preference = models.CharField(max_length=10, choices=[('light', 'Light'), ('dark', 'Dark')], default='dark')
+    profile_visibility = models.CharField(max_length=20, choices=[('public', 'Public'), ('private', 'Private')], default='private')
+    
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"

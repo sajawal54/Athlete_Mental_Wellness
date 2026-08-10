@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Base API configuration for Mood Endpoints
 const API = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/mood/',
+  baseURL: 'http://127.0.0.1:8000/api/',
 });
 
 // Interceptor: Requests se pehle accessToken attach karega

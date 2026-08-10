@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
+from .models import Profile
 
 User = get_user_model()
 class RegisterSerializer(serializers.ModelSerializer):
@@ -35,5 +36,28 @@ class LoginSerializer(serializers.Serializer):
 
         data['user'] = user
         return data
-    
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source='user.email', read_only=True)
+    username = serializers.CharField(source='user.username', required=False)
+    is_counselor = serializers.BooleanField(source='user.is_counselor', read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = [
+            'avatar', 'email', 'username', 'is_counselor',
+            'sport', 'team', 'position', 'personal_goals', 'preferences', 'age' , 'phone_number',
+    'email_notifications', 'reminder_notifications', 'theme_preference', 'profile_visibility'
+        ]
+
+    def update(self, instance, validated_data):
+        # Update nested username on User model if provided
+        user_data = validated_data.pop('user', {})
+        if 'username' in user_data:
+            instance.user.username = user_data['username']
+            instance.user.save()
+
+        # Update remaining profile fields
+        return super().update(instance, validated_data)
       
