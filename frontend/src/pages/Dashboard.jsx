@@ -1,286 +1,711 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  SparklesIcon, 
-  CheckCircleIcon, 
-  FireIcon, 
-  TrophyIcon, 
-  FaceSmileIcon,
-  ArrowRightIcon,
-  ShieldCheckIcon,
-  ChartBarSquareIcon
-} from '@heroicons/react/24/outline';
-import { useNavigate } from 'react-router-dom';
-import { getDashboardDataAPI } from '../services/dashboardService';
-import toast from 'react-hot-toast';
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  FiSmile,
+  FiTarget,
+  FiActivity,
+  FiAward,
+  FiArrowRight,
+  FiRefreshCw,
+  FiAlertCircle,
+  FiCheckCircle,
+  FiTrendingUp,
+  FiStar,
+  FiZap,
+  FiShield,
+  FiCheck,
+} from "react-icons/fi";
+import { getDashboardDataAPI } from "../services/dashboardService";
 
+/*
+|--------------------------------------------------------------------------
+| Format Mood Date
+|--------------------------------------------------------------------------
+*/
+const formatMoodDate = (dateString) => {
+  if (!dateString) return "Recorded";
+
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Recorded";
+  }
+
+  const now = new Date();
+
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (isToday) {
+    return `Today, ${date.toLocaleTimeString("en-PK", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })}`;
+  }
+
+  return date.toLocaleDateString("en-PK", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| Mood Styling Helper
+|--------------------------------------------------------------------------
+*/
+const getMoodStyle = (mood) => {
+  if (!mood) {
+    return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
+  }
+
+  const value = String(mood).toLowerCase();
+
+  if (
+    value.includes("great") ||
+    value.includes("good") ||
+    value.includes("happy") ||
+    value.includes("calm") ||
+    value.includes("energized")
+  ) {
+    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-800/30";
+  }
+
+  if (
+    value.includes("anxious") ||
+    value.includes("stressed") ||
+    value.includes("exhausted") ||
+    value.includes("sad") ||
+    value.includes("low")
+  ) {
+    return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-800/30";
+  }
+
+  return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-800/30";
+};
+
+/*
+|--------------------------------------------------------------------------
+| Mood Label Helper
+|--------------------------------------------------------------------------
+*/
+const getMoodLabel = (mood) => {
+  if (!mood) return "Recorded";
+
+  if (typeof mood === "object") {
+    return (
+      mood?.label ||
+      mood?.mood ||
+      mood?.mood_name ||
+      mood?.name ||
+      mood?.emotion ||
+      "Recorded"
+    );
+  }
+
+  return String(mood);
+};
+
+/*
+|--------------------------------------------------------------------------
+| Mood Emoji Helper
+|--------------------------------------------------------------------------
+*/
+const getMoodEmoji = (mood) => {
+  if (!mood) return "🙂";
+
+  if (typeof mood === "object" && mood?.emoji) {
+    return mood.emoji;
+  }
+
+  const value = String(
+    typeof mood === "object" ? mood?.mood || mood?.label || "" : mood,
+  ).toLowerCase();
+
+  if (value.includes("great") || value.includes("energized")) return "🔥";
+  if (value.includes("good") || value.includes("calm")) return "😌";
+  if (value.includes("neutral")) return "😐";
+  if (value.includes("anxious") || value.includes("stressed")) return "😰";
+  if (value.includes("exhausted") || value.includes("low")) return "😫";
+
+  return "🙂";
+};
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Component
+|--------------------------------------------------------------------------
+*/
 export default function Dashboard() {
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Dashboard Data
+  |--------------------------------------------------------------------------
+  | Used by the Refresh button and retry button.
+  |--------------------------------------------------------------------------
+  */
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await getDashboardDataAPI();
+      setData(response || {});
+    } catch (err) {
+      console.error("Dashboard API Error:", err);
+
+      if (err?.response?.status === 401) {
+        navigate("/login");
+        return;
+      }
+
+      setError("Unable to load your dashboard. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Initial Dashboard Load
+  |--------------------------------------------------------------------------
+  | The API promise is the external async operation.
+  |--------------------------------------------------------------------------
+  */
   useEffect(() => {
-    const fetchDashboard = async () => {
+    let isMounted = true;
+
+    const loadDashboard = async () => {
       try {
-        const data = await getDashboardDataAPI();
-        setDashboardData(data);
-      } catch (error) {
-        console.error("Failed to load dashboard from backend", error);
+        const response = await getDashboardDataAPI();
+
+        if (!isMounted) return;
+
+        setData(response || {});
+        setError("");
+      } catch (err) {
+        if (!isMounted) return;
+
+        console.error("Dashboard API Error:", err);
+
+        if (err?.response?.status === 401) {
+          navigate("/login");
+          return;
+        }
+
+        setError("Unable to load your dashboard. Please try again.");
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-    fetchDashboard();
-  }, []);
 
-  const handleGoalComplete = () => {
-    toast.success("Goal completed! +50 XP Earned 🎉");
-    setDashboardData(prev => ({
-      ...prev,
-      user_summary: { ...prev?.user_summary, xp: (prev?.user_summary?.xp || 0) + 50 },
-      todays_goal: { ...prev?.todays_goal, completed: true }
-    }));
-  };
+    loadDashboard();
 
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Data Selectors
+  |--------------------------------------------------------------------------
+  */
+  const userSummary = data?.user_summary || {};
+  const todaysGoal = data?.todays_goal || {};
+  const moodSummary = data?.mood_summary || {};
+  const aiGuide = data?.ai_guide || {};
+
+  /*
+  |--------------------------------------------------------------------------
+  | XP & Stats
+  |--------------------------------------------------------------------------
+  */
+  const totalXP = Number(userSummary?.total_xp ?? userSummary?.xp ?? 0);
+  const level = Math.max(Number(userSummary?.level ?? 1), 1);
+  const streak = Math.max(Number(userSummary?.streak ?? 0), 0);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Today's Mood
+  |--------------------------------------------------------------------------
+  */
+  const todayMoodData = moodSummary?.today || null;
+
+  const hasCheckedInToday = todayMoodData?.checked_in === true;
+
+  const todayMoodLabel = hasCheckedInToday
+    ? todayMoodData?.label || todayMoodData?.mood || "Completed"
+    : "No check-in yet";
+
+  const todayMoodEmoji = todayMoodData?.emoji || "🙂";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Goal & Trends
+  |--------------------------------------------------------------------------
+  */
+  const isGoalCompleted =
+    todaysGoal?.completed === true || todaysGoal?.is_completed === true;
+
+  const moodTrend = Array.isArray(moodSummary?.trend) ? moodSummary.trend : [];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Affirmation
+  |--------------------------------------------------------------------------
+  */
+  const affirmation =
+    data?.ai_affirmation ||
+    data?.affirmation ||
+    data?.daily_affirmation ||
+    "You are capable, resilient, and stronger than you think.";
+
+  const affirmationText =
+    typeof affirmation === "object"
+      ? affirmation?.text ||
+        affirmation?.affirmation ||
+        "You are capable, resilient, and stronger than you think."
+      : affirmation;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Dynamic Greeting
+  |--------------------------------------------------------------------------
+  */
+  const currentHour = new Date().getHours();
+
+  const greeting =
+    currentHour < 12
+      ? "Good Morning"
+      : currentHour < 18
+        ? "Good Afternoon"
+        : "Good Evening";
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[75vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-3 border-indigo-600 border-t-transparent rounded-xl animate-spin shadow-md"></div>
-          <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">Loading Executive Workspace...</p>
+      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="text-center">
+          <FiRefreshCw
+            className="mx-auto animate-spin text-indigo-600"
+            size={32}
+          />
+
+          <p className="mt-4 font-bold text-slate-800 dark:text-white">
+            Loading your dashboard...
+          </p>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Syncing your wellness data
+          </p>
         </div>
       </div>
     );
   }
 
-  // Backend response extraction
-  const { user_summary, todays_goal, mood_summary, ai_guide, quick_modules } = dashboardData || {};
+  /*
+  |--------------------------------------------------------------------------
+  | Error State
+  |--------------------------------------------------------------------------
+  */
+  if (error) {
+    return (
+      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
+        <div className="max-w-md rounded-3xl border border-red-200 bg-white p-8 text-center shadow-lg dark:border-red-900/50 dark:bg-slate-900">
+          <FiAlertCircle className="mx-auto text-red-500" size={40} />
 
-  // Logged-in user's real name dynamic priority check
-  const loggedInUserName = user_summary?.username || user_summary?.first_name || user_summary?.name || 'Athlete';
+          <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
+            Dashboard Unavailable
+          </h2>
 
+          <p className="mt-2 text-sm text-slate-500">{error}</p>
+
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            className="mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-indigo-700"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Dashboard Summary Cards
+  |--------------------------------------------------------------------------
+  */
+  const stats = [
+    {
+      title: "Today's Mood",
+      value: hasCheckedInToday
+        ? `${todayMoodEmoji} ${todayMoodLabel}`
+        : "No check-in",
+      subtitle: hasCheckedInToday
+        ? "Today's mood is recorded"
+        : "Complete your daily check-in",
+      icon: <FiSmile size={20} />,
+      link: "/mood-checkin",
+      badge: hasCheckedInToday ? "Completed" : "Pending",
+    },
+    {
+      title: "Daily Goal",
+      value: isGoalCompleted ? "Completed" : "In Progress",
+      subtitle: isGoalCompleted
+        ? "Today's target achieved"
+        : "Keep working toward your target",
+      icon: <FiTarget size={20} />,
+      link: "/goals",
+      badge: isGoalCompleted ? "Completed" : "Pending",
+    },
+    {
+      title: "Total XP",
+      value: `${totalXP.toLocaleString()} XP`,
+      subtitle: "Verified from your account",
+      icon: <FiActivity size={20} />,
+      link: "/profile",
+      badge: `Level ${level}`,
+    },
+    {
+      title: "Current Streak",
+      value: `${streak} Days`,
+      subtitle: "Consistency builds performance",
+      icon: <FiAward size={20} />,
+      link: "/dashboard",
+      badge: "Active",
+    },
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Dashboard UI
+  |--------------------------------------------------------------------------
+  */
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-300">
-      
-      {/* 1. WELCOME HERO BANNER (Real Logged-in User Display) */}
-      <div className="relative bg-linear-to-tr from-indigo-950 via-indigo-900 to-violet-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-indigo-950/10 overflow-hidden border border-indigo-900/50">
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute top-0 right-1/4 w-32 h-32 bg-violet-500/10 rounded-full blur-2xl pointer-events-none"></div>
-        
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-xl text-[11px] font-bold text-indigo-200 border border-white/10 shadow-inner">
-              <SparklesIcon className="w-3.5 h-3.5 text-amber-400" />
-              <span>Athlete Mental Performance Hub</span>
+    <div className="min-h-screen bg-slate-50 px-4 py-7 text-slate-900 dark:bg-slate-950 dark:text-white sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-7">
+        {/* HEADER */}
+        <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-6 dark:border-slate-800 md:flex-row md:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-300">
+              <FiZap size={13} />
+              Athlete Performance Hub
             </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
-              Welcome back, {loggedInUserName}! 👋
+
+            <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+              {greeting},{" "}
+              <span className="text-indigo-600 dark:text-indigo-400">
+                {userSummary?.name || userSummary?.username || "Athlete"}
+              </span>
             </h1>
-            <p className="text-xs text-indigo-200/90 font-medium max-w-xl leading-relaxed">
-              Your mental edge is your core strength. Keep up your active momentum today and stay completely aligned with your milestones.
+
+            <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Track your mental wellness, daily goals, consistency, and overall
+              XP from one place.
             </p>
           </div>
 
-          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/15 self-start lg:self-auto shadow-xl">
-            <div className="flex items-center gap-2.5 pr-4 border-r border-white/20">
-              <div className="w-10 h-10 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-400 shadow-inner">
-                <FireIcon className="w-5 h-5 animate-pulse" />
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={fetchDashboardData}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <FiRefreshCw size={15} />
+              Refresh
+            </button>
+
+            <Link
+              to="/mood-checkin"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-700"
+            >
+              <FiSmile size={16} />
+              Mood Check-In
+            </Link>
+          </div>
+        </header>
+
+        {/* XP BANNER */}
+        <section className="overflow-hidden rounded-3xl border border-indigo-200 bg-linear-to-r from-indigo-50 via-purple-50 to-emerald-50 p-6 dark:border-indigo-900/40 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-emerald-950/20">
+          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg">
+                <FiZap size={25} />
               </div>
+
               <div>
-                <p className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-300">Streak</p>
-                <p className="text-sm font-extrabold text-white">{user_summary?.streak || 0} Days</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                  Athlete XP
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black">
+                  {totalXP.toLocaleString()} XP
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Current account level: <strong>Level {level}</strong>
+                </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 pl-1">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-amber-300 shadow-inner">
-                <TrophyIcon className="w-5 h-5" />
+            <div className="flex flex-wrap gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">
+                <FiCheckCircle className="mr-1 inline text-emerald-500" />
+                Mood: {hasCheckedInToday ? "Done" : "Pending"}
               </div>
-              <div>
-                <p className="text-[10px] uppercase font-extrabold tracking-wider text-indigo-300">Level {user_summary?.level || 1}</p>
-                <p className="text-sm font-extrabold text-white">{user_summary?.xp || 0} XP</p>
+
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">
+                <FiTarget className="mr-1 inline text-indigo-500" />
+                Goal: {isGoalCompleted ? "Done" : "Pending"}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">
+                <FiAward className="mr-1 inline text-amber-500" />
+                {streak} Day Streak
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* 2. TODAY'S GOAL & MOOD SUMMARY */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div>
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-2xs font-bold border border-indigo-100/60">
-                  🎯
+        {/* STATS GRID */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {stats.map((stat) => (
+            <Link
+              key={stat.title}
+              to={stat.link}
+              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-indigo-300 dark:border-slate-800 dark:bg-slate-900"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                  {stat.icon}
                 </div>
-                <div>
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Today’s Primary Goal</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Daily actionable milestone</p>
-                </div>
-              </div>
-              <span className={`px-3 py-1 text-[10px] font-extrabold rounded-xl uppercase tracking-wider ${
-                todays_goal?.completed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}>
-                {todays_goal?.completed ? 'Completed' : 'Pending'}
-              </span>
-            </div>
 
-            <div className="py-6 space-y-4">
-              <p className="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">{todays_goal?.title || 'Complete daily mental check-in'}</p>
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
-                <div className={`h-full rounded-full transition-all duration-500 ${todays_goal?.completed ? 'bg-emerald-500 w-full' : 'bg-indigo-600 w-1/2'}`}></div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {stat.badge}
+                </span>
               </div>
-              <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                <span>Reward: +{todays_goal?.points || 50} XP</span>
-                <span>{todays_goal?.completed ? '100% Finished' : 'In Progress'}</span>
-              </div>
-            </div>
-          </div>
 
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400">Status Check</span>
-            {!todays_goal?.completed ? (
-              <button 
-                onClick={handleGoalComplete}
-                className="flex items-center gap-1.5 px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-95 cursor-pointer"
-              >
-                <CheckCircleIcon className="w-4 h-4" />
-                <span>Mark as Complete</span>
-              </button>
-            ) : (
-              <span className="text-xs font-extrabold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-                <CheckCircleIcon className="w-4 h-4" /> Goal Achieved Successfully!
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div>
-            <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
-              <div className="w-9 h-9 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shadow-2xs border border-violet-100/60">
-                <FaceSmileIcon className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Mood Summary</h3>
-                <p className="text-[10px] text-slate-400 font-medium">Emotional wellness state</p>
-              </div>
-            </div>
-
-            <div className="py-6 text-center space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 text-violet-700 text-xs font-extrabold rounded-2xl border border-violet-100 shadow-2xs">
-                <span>Today:</span>
-                <span className="text-violet-900 font-black">{mood_summary?.today || 'Calm'}</span>
-              </div>
-              <p className="text-[11px] text-slate-500 font-medium bg-slate-50 py-2.5 px-3 rounded-xl border border-slate-100">
-                Recent Trend: <span className="text-slate-800 font-bold">{mood_summary?.trend?.join(' → ') || 'Focused'}</span>
+              <p className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                {stat.title}
               </p>
-            </div>
-          </div>
 
-          <button 
-            onClick={() => navigate('/mood')}
-            className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <span>Open Mood Check-in</span>
-            <ArrowRightIcon className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-        </div>
-      </div>
+              <h3 className="mt-1 truncate text-xl font-black">{stat.value}</h3>
 
-      {/* 3. AI GUIDE & QUICK MODULES */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-linear-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl flex flex-col justify-between border border-slate-800">
-          <div className="space-y-4">
+              <p className="mt-1 text-xs text-slate-500">{stat.subtitle}</p>
+            </Link>
+          ))}
+        </section>
+
+        {/* MAIN CONTENT GRID */}
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* RECENT MOOD ACTIVITY */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
             <div className="flex items-center justify-between">
-              <span className="p-2.5 bg-white/10 rounded-2xl text-indigo-400 backdrop-blur-md border border-white/10">
-                <SparklesIcon className="w-5 h-5" />
-              </span>
-              <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 text-[10px] font-extrabold rounded-lg uppercase tracking-wider border border-indigo-500/30">AI Bio Guide</span>
+              <div>
+                <h2 className="font-bold">Recent Mood Activity</h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Your recent wellness check-ins
+                </p>
+              </div>
+
+              <FiTrendingUp className="text-indigo-500" size={22} />
             </div>
-            <div>
-              <h4 className="text-sm font-extrabold text-white">Need instant mental coaching?</h4>
-              <p className="text-xs text-slate-300 mt-1.5 italic leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5">
-                "{ai_guide?.prompt || 'How to stay focused under pressure?'}"
-              </p>
+
+            <div className="mt-5 space-y-3">
+              {moodTrend.length > 0 ? (
+                moodTrend.slice(0, 6).map((mood, index) => {
+                  const moodLabel = getMoodLabel(mood);
+
+                  const moodDate =
+                    typeof mood === "object"
+                      ? mood?.created_at || mood?.date || null
+                      : null;
+
+                  const moodEmoji = getMoodEmoji(mood);
+
+                  return (
+                    <div
+                      key={mood?.id || moodDate || `${moodLabel}-${index}`}
+                      className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm dark:bg-slate-800">
+                          <span className="text-lg">{moodEmoji}</span>
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">
+                            {moodLabel}
+                          </p>
+
+                          <p className="text-[10px] text-slate-500">
+                            Daily mood check-in
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`shrink-0 rounded-lg border px-3 py-1 text-[10px] font-bold ${getMoodStyle(
+                          moodLabel,
+                        )}`}
+                      >
+                        {formatMoodDate(moodDate)}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+                  <FiSmile className="mx-auto text-slate-400" size={30} />
+
+                  <p className="mt-3 text-sm font-bold">No mood records yet</p>
+
+                  <Link
+                    to="/mood-checkin"
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-indigo-600"
+                  >
+                    Start your first check-in
+                    <FiArrowRight size={13} />
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 
-          <button 
-            onClick={() => navigate('/ai-guide')}
-            className="mt-6 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
-          >
-            <span>Start AI Coaching Session</span>
-            <ArrowRightIcon className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
-          <div>
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-2xs border border-indigo-100/60">
-                  <ChartBarSquareIcon className="w-5 h-5" />
+          {/* DAILY GOAL */}
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                  <FiTarget />
                 </div>
+
                 <div>
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Quick Modules & Resources</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Frequently accessed tools</p>
+                  <h2 className="font-bold">Daily Goal</h2>
+
+                  <p className="text-xs text-slate-500">Today's focus</p>
                 </div>
               </div>
-              <button onClick={() => navigate('/modules')} className="text-xs font-extrabold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer">View All ➔</button>
+
+              <span
+                className={`rounded-full px-3 py-1 text-[10px] font-bold ${
+                  isGoalCompleted
+                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400"
+                    : "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400"
+                }`}
+              >
+                {isGoalCompleted
+                  ? "Completed"
+                  : `${todaysGoal?.points ?? 100} XP`}
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5">
-              {quick_modules?.map((mod) => (
-                <div 
-                  key={mod.id || mod.title} 
-                  onClick={() => navigate(mod.path || '/modules')}
-                  className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 hover:border-indigo-300 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
-                >
-                  <div>
-                    <span className={`inline-block px-2.5 py-1 text-[9px] font-black rounded-lg uppercase tracking-wider mb-2 ${
-                      mod.status === 'Unlocked' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200/60' : 'bg-slate-200 text-slate-600'
-                    }`}>
-                      {mod.status || 'Unlocked'}
-                    </span>
-                    <h4 className="text-xs font-extrabold text-slate-800 group-hover:text-indigo-600 transition-colors">{mod.title}</h4>
+            <div className="mt-5 rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+                {todaysGoal?.category || "Wellness"}
+              </p>
+
+              <h3 className="mt-2 font-bold">
+                {todaysGoal?.title || "Create your daily goal"}
+              </h3>
+
+              <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+                {isGoalCompleted ? (
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-600">
+                    <FiCheck />
+                    Goal completed
                   </div>
-                  <div className="mt-5 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-bold text-slate-500">
-                    <span>Progress</span>
-                    <span className="text-indigo-600 font-extrabold">{mod.progress || '0%'}</span>
-                  </div>
-                </div>
-              ))}
+                ) : (
+                  <Link
+                    to="/goals"
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700"
+                  >
+                    Open Goals
+                    <FiArrowRight />
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
+        </section>
 
-          <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-            <span>Powered by Django REST Framework JWT</span>
-            <span className="flex items-center gap-1 text-emerald-600 font-bold"><ShieldCheckIcon className="w-4 h-4" /> Fully Synced</span>
+        {/* AI COACH SECTION */}
+        <section className="rounded-3xl border border-indigo-200 bg-indigo-50/50 p-6 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+            <FiShield />
+
+            <span className="text-xs font-bold uppercase tracking-widest">
+              AI Coach
+            </span>
           </div>
-        </div>
+
+          <p className="mt-3 text-lg font-medium leading-relaxed">
+            "
+            {aiGuide?.prompt ||
+              "How are you preparing mentally for your next high-intensity session?"}
+            "
+          </p>
+
+          <Link
+            to="/bio-guide"
+            className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400"
+          >
+            Reflect with AI Guide
+            <FiArrowRight />
+          </Link>
+        </section>
+
+        {/* DAILY AFFIRMATION SECTION */}
+        <section className="overflow-hidden rounded-3xl bg-linear-to-r from-purple-950 via-indigo-950 to-slate-950 p-7 text-white shadow-xl">
+          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10">
+                <FiStar className="text-purple-300" size={22} />
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-purple-300">
+                  Mindset & Resilience
+                </p>
+
+                <h2 className="mt-1 text-xl font-black">Daily Affirmation</h2>
+
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-purple-100">
+                  "{affirmationText}"
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/affirmations"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-xs font-bold transition hover:bg-purple-500"
+            >
+              View Affirmations
+              <FiArrowRight />
+            </Link>
+          </div>
+        </section>
       </div>
-
-      {/* 4. TROPHY ROOM SHORTCUT */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-5 hover:border-slate-300 transition-all">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-inner border border-amber-200/60">
-            🏆
-          </div>
-          <div>
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">Recent Achievements & Trophy Room</h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">You've unlocked new performance badges this week. Keep up the stellar discipline!</p>
-          </div>
-        </div>
-
-        <button 
-          onClick={() => navigate('/trophy-room')}
-          className="px-5 py-3 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-slate-900/10 whitespace-nowrap active:scale-95 cursor-pointer"
-        >
-          Visit Trophy Room ➔
-        </button>
-      </div>
-
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+// Environment variable se directly base URL read ho raha hai
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 // Base API configuration for Mood Endpoints
 const API = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/',
+  baseURL: API_BASE_URL,
 });
 
 // Interceptor: Requests se pehle accessToken attach karega
@@ -16,7 +19,7 @@ API.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
       console.log('Access Token Attached successfully!');
     } else {
-      console.warn('Access Token not found im localStorage');
+      console.warn('Access Token not found in localStorage');
     }
 
     return config;
@@ -42,8 +45,6 @@ export const moodService = {
     const response = await API.delete(`moods/${id}/`);
     return response.data;
   },
-
-  
 };
 
 export default API;

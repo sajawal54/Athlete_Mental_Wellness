@@ -1,26 +1,47 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Added for module navigation
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'; // Added for Trend Chart
-import { moodService } from '../services/moodService';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
+
+import { moodService } from "../services/moodService";
+
+const CHECKIN_XP_REWARD = 80;
 
 const MOOD_OPTIONS = [
-  { id: 'great', label: 'Energized', emoji: '🔥' },
-  { id: 'good', label: 'Focused', emoji: '😌' },
-  { id: 'neutral', label: 'Neutral', emoji: '😐' },
-  { id: 'anxious', label: 'Stressed', emoji: '😰' },
-  { id: 'exhausted', label: 'Exhausted', emoji: '😫' },
+  {
+    id: "great",
+    label: "Energized",
+    emoji: "🔥",
+  },
+  {
+    id: "good",
+    label: "Focused",
+    emoji: "😌",
+  },
+  {
+    id: "neutral",
+    label: "Neutral",
+    emoji: "😐",
+  },
+  {
+    id: "anxious",
+    label: "Stressed",
+    emoji: "😰",
+  },
+  {
+    id: "exhausted",
+    label: "Exhausted",
+    emoji: "😫",
+  },
 ];
 
-// Activity Recommendations based on logged mood
-const RECOMMENDED_ACTIVITIES = {
-  anxious: { title: 'Deep Breathing Exercise', path: '/breathing', icon: '🫁' },
-  exhausted: { title: 'Rest & Recovery Protocol', path: '/breathing', icon: '🌬️' },
-  neutral: { title: 'Focus & Mindfulness', path: '/mindfulness', icon: '🧘' },
-  good: { title: 'Gratitude Reflection', path: '/journal', icon: '📝' },
-  great: { title: 'Performance Visualization', path: '/visualization', icon: '⚡' },
-};
-
-// Numeric scores for Y-Axis rendering in Recharts
 const MOOD_SCORE_MAP = {
   exhausted: 1,
   anxious: 2,
@@ -29,263 +50,535 @@ const MOOD_SCORE_MAP = {
   great: 5,
 };
 
+/*
+ * Only routes that currently exist in App.jsx
+ * are used here.
+ */
+const RECOMMENDED_ACTIVITIES = {
+  anxious: {
+    title: "Sound Therapy",
+    path: "/sound-therapy",
+    icon: "🌊",
+  },
+
+  exhausted: {
+    title: "Rest & Recovery with Sound Therapy",
+    path: "/sound-therapy",
+    icon: "🌙",
+  },
+
+  neutral: {
+    title: "AI Bio Guide",
+    path: "/bio-guide",
+    icon: "🧘",
+  },
+
+  good: {
+    title: "Daily Goals",
+    path: "/goals",
+    icon: "🎯",
+  },
+
+  great: {
+    title: "Daily Goals",
+    path: "/goals",
+    icon: "⚡",
+  },
+};
+
 export default function MoodCheckIn() {
   const navigate = useNavigate();
+
   const [selectedMood, setSelectedMood] = useState(null);
   const [energyLevel, setEnergyLevel] = useState(3);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const [history, setHistory] = useState([]);
-  const [aiMessage, setAiMessage] = useState('');
-  const [lastSubmittedMood, setLastSubmittedMood] = useState(null); // Track last submitted mood for activity link
-  const [error, setError] = useState('');
+  const [aiMessage, setAiMessage] = useState("");
+  const [lastSubmittedMood, setLastSubmittedMood] = useState(null);
+
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
-  // 1. Load mood history on initial page render
+  /*
+   * Load mood history when the page mounts.
+   *
+   * The async request is created inside the effect so
+   * the effect does not depend on another callback that
+   * updates state.
+   */
   useEffect(() => {
-    fetchMoodHistory();
-  }, []);
+    let cancelled = false;
 
-  const fetchMoodHistory = async () => {
-    try {
-      const data = await moodService.getMoods();
-      setHistory(data);
-    } catch (err) {
-      setError('Failed to load mood history. Please try refreshing.');
-    }
-  };
+    const loadMoodHistory = async () => {
+      try {
+        const data = await moodService.getMoods();
 
-  // 2. Handle Check-In Submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setAiMessage('');
+        if (cancelled) return;
+
+        setHistory(Array.isArray(data) ? data : []);
+        setError("");
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error("Mood history error:", err);
+
+        if (err?.response?.status === 401) {
+          navigate("/login");
+          return;
+        }
+
+        setError("Unable to load your mood history.");
+      }
+    };
+
+    loadMoodHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  /*
+   * Submit a new mood check-in.
+   */
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError("");
+    setAiMessage("");
 
     if (!selectedMood) {
-      setError('Please select a mood option first!');
+      setError("Please select your current mood first.");
       return;
     }
 
     setLoading(true);
+
     try {
       const payload = {
         mood: selectedMood.id,
         emoji: selectedMood.emoji,
-        energy_level: parseInt(energyLevel, 10),
-        notes: notes.trim()
+        energy_level: Number(energyLevel),
+        notes: notes.trim(),
       };
 
       const newEntry = await moodService.addMood(payload);
 
-      // Prepend newly saved entry and set AI feedback
-      setHistory([newEntry, ...history]);
-      if (newEntry.ai_message) {
-        setAiMessage(newEntry.ai_message);
-      }
+      setHistory((currentHistory) => [newEntry, ...currentHistory]);
 
+      setAiMessage(newEntry?.ai_message || "");
       setLastSubmittedMood(selectedMood.id);
 
-      // Reset Input Form State
+      /*
+       * Reset form after successful submission.
+       */
       setSelectedMood(null);
-      setNotes('');
+      setNotes("");
       setEnergyLevel(3);
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
-      } else {
-        setError('Failed to save your check-in. Please try again.');
+      console.error("Mood submit error:", err);
+
+      if (err?.response?.status === 401) {
+        navigate("/login");
+        return;
       }
+
+      const backendError =
+        err?.response?.data?.error || err?.response?.data?.detail;
+
+      setError(backendError || "Unable to save your mood check-in.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Delete Entry Handler
+  /*
+   * Delete a mood history entry.
+   */
   const handleDelete = async (id) => {
+    setDeletingId(id);
+    setError("");
+
     try {
       await moodService.deleteMood(id);
-      setHistory(history.filter((item) => item.id !== id));
+
+      setHistory((currentHistory) =>
+        currentHistory.filter((item) => item.id !== id),
+      );
     } catch (err) {
-      alert('Unable to delete this record. Please try again.');
+      console.error("Mood delete error:", err);
+
+      if (err?.response?.status === 401) {
+        navigate("/login");
+        return;
+      }
+
+      const backendError =
+        err?.response?.data?.error || err?.response?.data?.detail;
+
+      setError(backendError || "Unable to delete this mood record.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  // Prepare chart data (Chronological order - last 7 entries)
-  const chartData = [...history]
-    .reverse()
-    .slice(-7)
-    .map((item) => ({
-      date: new Date(item.created_at || item.date || Date.now()).toLocaleDateString('en-US', { weekday: 'short' }),
-      score: MOOD_SCORE_MAP[item.mood] || 3,
-      moodLabel: item.mood,
-    }));
+  /*
+   * Prepare the latest seven mood entries
+   * for the Recharts graph.
+   */
+  const chartData = useMemo(() => {
+    return [...history]
+      .sort(
+        (a, b) =>
+          new Date(a.created_at || a.date) - new Date(b.created_at || b.date),
+      )
+      .slice(-7)
+      .map((item) => {
+        const itemDate = item.created_at || item.date;
+
+        return {
+          date: itemDate
+            ? new Date(itemDate).toLocaleDateString("en-US", {
+                weekday: "short",
+              })
+            : "—",
+
+          score: MOOD_SCORE_MAP[item.mood] || 3,
+
+          moodLabel: item.mood || "neutral",
+        };
+      });
+  }, [history]);
+
+  /*
+   * Resolve recommendation for the latest
+   * submitted mood.
+   */
+  const recommendedActivity = lastSubmittedMood
+    ? RECOMMENDED_ACTIVITIES[lastSubmittedMood]
+    : null;
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
-      
-      {/* Primary Check-In Form */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-5">
-        <h2 className="text-lg font-bold text-slate-800">Daily Mood Check-In</h2>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 dark:bg-slate-950">
+      <div className="mx-auto max-w-4xl space-y-6">
+        {/* HEADER */}
+        <section className="rounded-3xl bg-linear-to-r from-indigo-600 to-purple-700 p-6 text-white shadow-xl">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">
+            Mental Wellness
+          </p>
 
-        {/* Dynamic English Error Alert */}
+          <div className="mt-2 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <h1 className="text-3xl font-black">Daily Mood Check-In</h1>
+
+              <p className="mt-2 max-w-2xl text-sm text-indigo-100">
+                Check in with yourself, track your emotional patterns, and
+                receive a personalized wellness insight.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-center backdrop-blur-md">
+              <p className="text-2xl font-black">+{CHECKIN_XP_REWARD} XP</p>
+
+              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">
+                Daily Reward
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ERROR */}
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-semibold">
+          <div
+            role="alert"
+            className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400"
+          >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          
-          {/* Step 1: Mood Choice */}
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">
-              1. Select Your Current Mood
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {MOOD_OPTIONS.map((m) => {
-                const isSelected = selectedMood?.id === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setSelectedMood(m)}
-                    className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all ${
-                      isSelected
-                        ? 'bg-indigo-50 border-indigo-600 text-indigo-600 ring-2 ring-indigo-600'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-2xl">{m.emoji}</span>
-                    <span>{m.label}</span>
-                  </button>
-                );
-              })}
+        {/* CHECK-IN FORM */}
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <form onSubmit={handleSubmit} className="space-y-7">
+            {/* MOOD PICKER */}
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  How are you feeling?
+                </label>
+
+                <span className="text-xs text-slate-400">Required</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {MOOD_OPTIONS.map((mood) => {
+                  const selected = selectedMood?.id === mood.id;
+
+                  return (
+                    <button
+                      key={mood.id}
+                      type="button"
+                      onClick={() => setSelectedMood(mood)}
+                      aria-pressed={selected}
+                      className={`rounded-2xl border p-4 transition ${
+                        selected
+                          ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-500/20 dark:border-indigo-400 dark:bg-indigo-950/40"
+                          : "border-slate-200 bg-slate-50 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-800/50"
+                      }`}
+                    >
+                      <div className="text-3xl">{mood.emoji}</div>
+
+                      <p
+                        className={`mt-2 text-xs font-bold ${
+                          selected
+                            ? "text-indigo-600 dark:text-indigo-400"
+                            : "text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        {mood.label}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Step 2: Energy Level Slider */}
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1 uppercase tracking-wide">
-              2. Energy Level ({energyLevel} / 5)
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              value={energyLevel}
-              onChange={(e) => setEnergyLevel(e.target.value)}
-              className="w-full accent-indigo-600 cursor-pointer"
-            />
-          </div>
-
-          {/* Step 3: Optional Notes */}
-          <div>
-            <div className="flex justify-between text-xs font-bold text-slate-600 mb-1 uppercase tracking-wide">
-              <span>3. Optional Journal Notes</span>
-              <span className="text-slate-400 font-normal">{notes.length}/300</span>
-            </div>
-            <textarea
-              maxLength={300}
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="How are you feeling today? (Optional)"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Action Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Saving Entry...' : 'Save Check-In'}
-          </button>
-        </form>
-      </div>
-
-      {/* AI Insight Response Box with Deep Breath / Recommended Activity Button */}
-      {aiMessage && (
-        <div className="bg-indigo-900 text-white p-5 rounded-2xl shadow-sm space-y-3">
-          <div>
-            <p className="text-xs font-bold text-indigo-300 uppercase tracking-wider">🤖 AI Insight</p>
-            <p className="text-sm font-medium leading-relaxed mt-1">{aiMessage}</p>
-          </div>
-
-          {/* Recommended Exercise Button */}
-          {lastSubmittedMood && RECOMMENDED_ACTIVITIES[lastSubmittedMood] && (
-            <div className="pt-3 border-t border-indigo-800/80 flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-indigo-200">
-                {RECOMMENDED_ACTIVITIES[lastSubmittedMood].icon} Recommended: {RECOMMENDED_ACTIVITIES[lastSubmittedMood].title}
-              </span>
-              <button
-                onClick={() => navigate(RECOMMENDED_ACTIVITIES[lastSubmittedMood].path)}
-                className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-              >
-                Start Activity ➔
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Weekly Mood Trend Chart */}
-      {history.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            📈 Mood Trend (Last 7 Entries)
-          </h3>
-          <div className="h-44 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} />
-                <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10, fill: '#64748b' }} />
-                <Tooltip formatter={(value, name, props) => [`Score: ${value} (${props.payload.moodLabel})`, 'Mood']} />
-                <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={2.5} dot={{ r: 4, fill: '#4f46e5' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Historical Logs Listing */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Previous Records ({history.length})
-        </h3>
-
-        {history.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">No check-in entries logged yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {history.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{item.emoji}</span>
-                  <div>
-                    <p className="font-bold text-slate-800 capitalize">
-                      {item.mood} <span className="text-slate-400 font-normal">(Energy: {item.energy_level}/5)</span>
-                    </p>
-                    {item.notes && <p className="text-slate-600 mt-0.5">{item.notes}</p>}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="text-red-500 font-semibold hover:underline"
+            {/* ENERGY LEVEL */}
+            <div>
+              <div className="mb-3 flex justify-between">
+                <label
+                  htmlFor="energy-level"
+                  className="text-xs font-bold uppercase tracking-wider text-slate-500"
                 >
-                  Delete
+                  Energy Level
+                </label>
+
+                <span className="text-sm font-black text-indigo-600">
+                  {energyLevel}/5
+                </span>
+              </div>
+
+              <input
+                id="energy-level"
+                type="range"
+                min="1"
+                max="5"
+                value={energyLevel}
+                onChange={(event) => setEnergyLevel(Number(event.target.value))}
+                aria-label="Energy Level"
+                className="w-full accent-indigo-600"
+              />
+
+              <div className="mt-2 flex justify-between text-[10px] font-semibold text-slate-400">
+                <span>Very Low</span>
+                <span>Balanced</span>
+                <span>Very High</span>
+              </div>
+            </div>
+
+            {/* JOURNAL NOTE */}
+            <div>
+              <div className="mb-2 flex justify-between">
+                <label
+                  htmlFor="mood-notes"
+                  className="text-xs font-bold uppercase tracking-wider text-slate-500"
+                >
+                  Journal Note
+                </label>
+
+                <span className="text-[10px] text-slate-400">
+                  {notes.length}/300
+                </span>
+              </div>
+
+              <textarea
+                id="mood-notes"
+                value={notes}
+                maxLength={300}
+                rows={4}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="What's on your mind today?"
+                className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm outline-none transition focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+            </div>
+
+            {/* SUBMIT BUTTON */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-2xl bg-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading
+                ? "Saving Check-In..."
+                : `Save Check-In • +${CHECKIN_XP_REWARD} XP`}
+            </button>
+          </form>
+        </section>
+
+        {/* AI WELLNESS INSIGHT */}
+        {aiMessage && (
+          <section className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-indigo-400">
+              🤖 AI Wellness Insight
+            </p>
+
+            <p className="mt-3 text-lg font-medium leading-relaxed">
+              {aiMessage}
+            </p>
+
+            <div className="mt-5 flex flex-col justify-between gap-3 border-t border-slate-700 pt-5 sm:flex-row sm:items-center">
+              {recommendedActivity ? (
+                <div className="text-sm text-slate-300">
+                  {recommendedActivity.icon} Recommended:{" "}
+                  {recommendedActivity.title}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-400">
+                  Need personalized guidance? Check out AI Bio Guide.
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                {recommendedActivity && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(recommendedActivity.path)}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                  >
+                    Start Activity →
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/bio-guide")}
+                  className="rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/20"
+                >
+                  🧬 AI Bio Guide
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
+          </section>
         )}
-      </div>
 
+        {/* MOOD TREND */}
+        {history.length > 0 && (
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-5">
+              <h2 className="font-bold text-slate-900 dark:text-white">
+                Mood Trend
+              </h2>
+
+              <p className="text-xs text-slate-500">Your last 7 mood entries</p>
+            </div>
+
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+
+                  <XAxis
+                    dataKey="date"
+                    tick={{
+                      fontSize: 10,
+                      fill: "#94a3b8",
+                    }}
+                  />
+
+                  <YAxis
+                    domain={[1, 5]}
+                    ticks={[1, 2, 3, 4, 5]}
+                    tick={{
+                      fontSize: 10,
+                      fill: "#94a3b8",
+                    }}
+                  />
+
+                  <Tooltip
+                    formatter={(value, name, props) => [
+                      `${props.payload.moodLabel} (${value}/5)`,
+                      "Mood",
+                    ]}
+                  />
+
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        )}
+
+        {/* MOOD HISTORY */}
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-5">
+            <h2 className="font-bold text-slate-900 dark:text-white">
+              Mood History
+            </h2>
+
+            <p className="text-xs text-slate-500">Your previous check-ins</p>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400 dark:border-slate-700">
+              No mood check-ins yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {history.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{item.emoji || "😐"}</span>
+
+                    <div>
+                      <p className="text-sm font-bold capitalize text-slate-800 dark:text-white">
+                        {item.mood}
+                      </p>
+
+                      <p className="text-xs text-slate-500">
+                        Energy: {item.energy_level}/5
+                      </p>
+
+                      {item.notes && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.notes}
+                        </p>
+                      )}
+
+                      {(item.created_at || item.date) && (
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          {new Date(
+                            item.created_at || item.date,
+                          ).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={deletingId === item.id}
+                    onClick={() => handleDelete(item.id)}
+                    className="text-xs font-bold text-red-500 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {deletingId === item.id ? "..." : "Delete"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

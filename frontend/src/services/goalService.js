@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8000/api/';
+// Directly read base URL from environment variables
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 // 1. Create a dedicated Axios instance for your API
 const api = axios.create({
@@ -28,25 +29,25 @@ api.interceptors.request.use(
 export const goalService = {
   // Fetch today's goals
   getDailyGoals: async () => {
-    const response = await api.get('/goals/daily/');
+    const response = await api.get('goals/daily/');
     return response.data;
   },
 
   // Toggle completion (PATCH request)
   toggleGoalComplete: async (goalId) => {
-    const response = await api.patch(`/goals/${goalId}/toggle/`, {});
+    const response = await api.patch(`goals/${goalId}/toggle/`, {});
     return response.data;
   },
 
   // Create Custom Goal (POST request)
   addGoal: async (goalData) => {
-    const response = await api.post('/goals/daily/', goalData);
+    const response = await api.post('goals/daily/', goalData);
     return response.data;
   },
 
   // Delete Goal (DELETE request)
   deleteGoal: async (goalId) => {
-    const response = await api.delete(`/goals/${goalId}/`);
+    const response = await api.delete(`goals/${goalId}/`);
     return response.data;
   }
 };

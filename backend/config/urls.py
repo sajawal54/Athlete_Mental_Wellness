@@ -25,7 +25,9 @@ urlpatterns = [
     path("api/" , include("apps.moods.urls")),
     path("api/" , include("apps.goals.urls")),
     path( "api/bio-guide/", include("apps.bio_guide.urls") ),
-     path("api/sound-therapy/", include("apps.sound_therapy.urls")),
+    path("api/sound-therapy/", include("apps.sound_therapy.urls")),
+    path("api/affirmations/" , include("apps.affirmations.urls")),
+    path("api/dashboard/", include("apps.dashboard.urls")),
 ]
 
 

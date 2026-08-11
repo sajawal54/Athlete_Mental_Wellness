@@ -25,6 +25,8 @@ INSTALLED_APPS = [
     "apps.accounts",
 "apps.moods",
 "apps.goals",
+"apps.affirmations",
+"apps.dashboard",
 "apps.sound_therapy",
 "apps.bio_guide",
     "rest_framework",

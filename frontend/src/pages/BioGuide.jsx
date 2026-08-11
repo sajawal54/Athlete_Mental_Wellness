@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   getConversations,
@@ -36,11 +37,155 @@ const SUGGESTED_MODULES = [
   },
 ];
 
+// Helper to format timestamps safely
+const formatTime = (timestamp) => {
+  if (!timestamp) return "";
+  try {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+};
+
 // ==========================================
-// COMPONENT
+// OUTSIDE COMPONENT: CONVERSATION HISTORY
+// (Extracted to solve React Compiler rule violation)
 // ==========================================
 
-function BioGuide() {
+function ConversationHistory({
+  loadingHistory,
+  conversations,
+  activeConversation,
+  deletingConversationId,
+  setShowMobileHistory,
+  handleNewChat,
+  handleSelectConversation,
+  handleDeleteConversation,
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* HISTORY HEADER */}
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-800/80 p-4">
+        <h2 className="text-sm font-bold text-white">Conversations</h2>
+
+        <button
+          type="button"
+          onClick={() => setShowMobileHistory(false)}
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white md:hidden"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* NEW CHAT */}
+      <div className="shrink-0 border-b border-slate-800/80 p-4">
+        <button
+          type="button"
+          onClick={handleNewChat}
+          className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 active:scale-95"
+        >
+          + New Conversation
+        </button>
+      </div>
+
+      {/* HISTORY LIST */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-slate-700/50 scrollbar-track-transparent">
+        <h3 className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          History
+        </h3>
+
+        {loadingHistory ? (
+          <div className="px-2 py-4 text-xs text-slate-500">
+            Loading conversations...
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="px-2 py-4 text-xs text-slate-500">
+            No conversations yet.
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {conversations.map((conversation) => {
+              const isDeleting = deletingConversationId === conversation.id;
+              const isActive = activeConversation?.id === conversation.id;
+
+              return (
+                <div
+                  key={conversation.id}
+                  className={`group relative w-full rounded-xl border transition ${
+                    isActive
+                      ? "border-slate-700/60 bg-slate-800"
+                      : "border-transparent hover:bg-slate-800/50"
+                  }`}
+                >
+                  {/* SELECT */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectConversation(conversation)}
+                    disabled={isDeleting}
+                    className="w-full rounded-xl p-3 pr-10 text-left disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <p className="truncate text-xs font-semibold text-slate-200">
+                      {conversation.title ||
+                        conversation.messages?.[0]?.content ||
+                        "New Conversation"}
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {formatTime(
+                        conversation.updated_at || conversation.created_at
+                      )}
+                    </p>
+                  </button>
+
+                  {/* DELETE */}
+                  <button
+                    type="button"
+                    onClick={(event) =>
+                      handleDeleteConversation(event, conversation.id)
+                    }
+                    disabled={isDeleting}
+                    title="Delete conversation"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isDeleting ? (
+                      <span className="text-[10px]">...</span>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.8}
+                        stroke="currentColor"
+                        className="h-4 w-4"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 7h12M9 7V4h6v3m-8 0 .75 13h6.5L15 7M10 11v5m4-5v5"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// MAIN COMPONENT
+// ==========================================
+
+export default function BioGuide() {
+  const navigate = useNavigate();
+
   // ======================================
   // STATE
   // ======================================
@@ -73,16 +218,7 @@ function BioGuide() {
   // ======================================
 
   const scrollToBottom = (behavior = "smooth") => {
-    const container = messagesContainerRef.current;
-
-    if (!container) {
-      return;
-    }
-
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior,
-    });
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
@@ -90,9 +226,11 @@ function BioGuide() {
       return;
     }
 
-    requestAnimationFrame(() => {
+    const timer = setTimeout(() => {
       scrollToBottom("smooth");
-    });
+    }, 50);
+
+    return () => clearTimeout(timer);
   }, [activeConversation?.messages?.length, loading]);
 
   // ======================================
@@ -133,10 +271,8 @@ function BioGuide() {
     setError(null);
     setLastFailedMessage("");
 
-    // Close mobile history
     setShowMobileHistory(false);
 
-    // Focus input
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 100);
@@ -172,7 +308,7 @@ function BioGuide() {
     }
 
     const confirmed = window.confirm(
-      "Are you sure you want to delete this conversation?",
+      "Are you sure you want to delete this conversation?"
     );
 
     if (!confirmed) {
@@ -185,12 +321,10 @@ function BioGuide() {
 
       await deleteConversation(conversationId);
 
-      // Remove from sidebar
       setConversations((previous) =>
-        previous.filter((conversation) => conversation.id !== conversationId),
+        previous.filter((conversation) => conversation.id !== conversationId)
       );
 
-      // If deleted conversation is active
       if (activeConversation?.id === conversationId) {
         setActiveConversation(null);
         setMessage("");
@@ -225,58 +359,58 @@ function BioGuide() {
       return;
     }
 
+    const tempUserMessage = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistic UI state update
+    setActiveConversation((prev) => {
+      if (!prev) {
+        return {
+          id: `temp-conv-${Date.now()}`,
+          title: text,
+          messages: [tempUserMessage],
+        };
+      }
+      return {
+        ...prev,
+        messages: [...(prev.messages || []), tempUserMessage],
+      };
+    });
+
+    setMessage("");
+
     try {
       setLoading(true);
-
       setError(null);
       setLastFailedMessage("");
 
       let response;
 
-      // ==================================
-      // NEW CONVERSATION
-      // ==================================
-
-      if (!activeConversation) {
+      if (!activeConversation || activeConversation.id.toString().startsWith("temp-")) {
         response = await createConversation(text);
-      }
-
-      // ==================================
-      // EXISTING CONVERSATION
-      // ==================================
-      else {
+      } else {
         response = await sendMessage(activeConversation.id, text);
       }
 
-      // ==================================
-      // UPDATE ACTIVE CONVERSATION
-      // ==================================
-
       setActiveConversation(response);
-
-      // ==================================
-      // UPDATE HISTORY
-      // ==================================
 
       setConversations((previous) => {
         const exists = previous.some(
-          (conversation) => conversation.id === response.id,
+          (conversation) => conversation.id === response.id
         );
 
         if (exists) {
           return previous.map((conversation) =>
-            conversation.id === response.id ? response : conversation,
+            conversation.id === response.id ? response : conversation
           );
         }
 
         return [response, ...previous];
       });
-
-      // ==================================
-      // CLEAR INPUT
-      // ==================================
-
-      setMessage("");
 
       setTimeout(() => {
         textareaRef.current?.focus();
@@ -285,7 +419,6 @@ function BioGuide() {
       console.error("Bio Guide message error:", err);
 
       setError("The Bio Guide could not process your message.");
-
       setLastFailedMessage(text);
     } finally {
       setLoading(false);
@@ -302,9 +435,7 @@ function BioGuide() {
     }
 
     const failedMessage = lastFailedMessage;
-
     setLastFailedMessage("");
-
     await handleSendMessage(failedMessage);
   };
 
@@ -315,7 +446,6 @@ function BioGuide() {
   const handleClearInput = () => {
     setMessage("");
     setError(null);
-
     textareaRef.current?.focus();
   };
 
@@ -326,7 +456,6 @@ function BioGuide() {
   const handleKeyDown = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-
       handleSendMessage();
     }
   };
@@ -336,26 +465,7 @@ function BioGuide() {
   // ======================================
 
   const handleModuleClick = (route) => {
-    window.location.href = route;
-  };
-
-  // ======================================
-  // FORMAT TIME
-  // ======================================
-
-  const formatTime = (timestamp) => {
-    if (!timestamp) {
-      return "";
-    }
-
-    try {
-      return new Date(timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "";
-    }
+    navigate(route);
   };
 
   // ======================================
@@ -365,152 +475,28 @@ function BioGuide() {
   const messages = activeConversation?.messages || [];
 
   // ======================================
-  // CONVERSATION HISTORY
-  // ======================================
-
-  const ConversationHistory = () => {
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        {/* HISTORY HEADER */}
-
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-800/80 p-4">
-          <h2 className="text-sm font-bold text-white">Conversations</h2>
-
-          <button
-            type="button"
-            onClick={() => setShowMobileHistory(false)}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white md:hidden"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* NEW CHAT */}
-
-        <div className="shrink-0 border-b border-slate-800/80 p-4">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 active:scale-95"
-          >
-            + New Conversation
-          </button>
-        </div>
-
-        {/* HISTORY LIST */}
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-slate-700/50 scrollbar-track-transparent">
-          <h3 className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            History
-          </h3>
-
-          {loadingHistory ? (
-            <div className="px-2 py-4 text-xs text-slate-500">
-              Loading conversations...
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="px-2 py-4 text-xs text-slate-500">
-              No conversations yet.
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {conversations.map((conversation) => {
-                const isDeleting = deletingConversationId === conversation.id;
-
-                const isActive = activeConversation?.id === conversation.id;
-
-                return (
-                  <div
-                    key={conversation.id}
-                    className={`group relative w-full rounded-xl border transition ${
-                      isActive
-                        ? "border-slate-700/60 bg-slate-800"
-                        : "border-transparent hover:bg-slate-800/50"
-                    }`}
-                  >
-                    {/* SELECT */}
-
-                    <button
-                      type="button"
-                      onClick={() => handleSelectConversation(conversation)}
-                      disabled={isDeleting}
-                      className="w-full rounded-xl p-3 pr-10 text-left disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <p className="truncate text-xs font-semibold text-slate-200">
-                        {conversation.title ||
-                          conversation.messages?.[0]?.content ||
-                          "New Conversation"}
-                      </p>
-
-                      <p className="mt-1 text-[10px] text-slate-500">
-                        {formatTime(
-                          conversation.updated_at || conversation.created_at,
-                        )}
-                      </p>
-                    </button>
-
-                    {/* DELETE */}
-
-                    <button
-                      type="button"
-                      onClick={(event) =>
-                        handleDeleteConversation(event, conversation.id)
-                      }
-                      disabled={isDeleting}
-                      title="Delete conversation"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isDeleting ? (
-                        <span className="text-[10px]">...</span>
-                      ) : (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.8}
-                          stroke="currentColor"
-                          className="h-4 w-4"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M6 7h12M9 7V4h6v3m-8 0 .75 13h6.5L15 7M10 11v5m4-5v5"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ======================================
   // RENDER
   // ======================================
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-950">
-      {/* ================================= */}
       {/* DESKTOP SIDEBAR */}
-      {/* ================================= */}
-
       <aside className="hidden h-full w-72 min-h-0 shrink-0 flex-col border-r border-slate-800/80 bg-slate-900/90 md:flex">
-        <ConversationHistory />
+        <ConversationHistory
+          loadingHistory={loadingHistory}
+          conversations={conversations}
+          activeConversation={activeConversation}
+          deletingConversationId={deletingConversationId}
+          setShowMobileHistory={setShowMobileHistory}
+          handleNewChat={handleNewChat}
+          handleSelectConversation={handleSelectConversation}
+          handleDeleteConversation={handleDeleteConversation}
+        />
       </aside>
 
-      {/* ================================= */}
       {/* MOBILE HISTORY DRAWER */}
-      {/* ================================= */}
-
       {showMobileHistory && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          {/* OVERLAY */}
-
           <button
             type="button"
             aria-label="Close history"
@@ -518,27 +504,26 @@ function BioGuide() {
             className="absolute inset-0 bg-black/60"
           />
 
-          {/* DRAWER */}
-
           <aside className="relative z-10 flex h-full w-[85%] max-w-sm min-h-0 flex-col border-r border-slate-800 bg-slate-900 shadow-2xl">
-            <ConversationHistory />
+            <ConversationHistory
+              loadingHistory={loadingHistory}
+              conversations={conversations}
+              activeConversation={activeConversation}
+              deletingConversationId={deletingConversationId}
+              setShowMobileHistory={setShowMobileHistory}
+              handleNewChat={handleNewChat}
+              handleSelectConversation={handleSelectConversation}
+              handleDeleteConversation={handleDeleteConversation}
+            />
           </aside>
         </div>
       )}
 
-      {/* ================================= */}
-      {/* MAIN CHAT */}
-      {/* ================================= */}
-
+      {/* MAIN CHAT AREA */}
       <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-950">
-        {/* ================================= */}
         {/* HEADER */}
-        {/* ================================= */}
-
         <header className="flex shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-900/60 px-4 py-3.5 backdrop-blur-md sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            {/* MOBILE HISTORY */}
-
             <button
               type="button"
               onClick={() => setShowMobileHistory(true)}
@@ -561,8 +546,6 @@ function BioGuide() {
               </svg>
             </button>
 
-            {/* TITLE */}
-
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold tracking-tight text-white">
                 AI Bio Guide
@@ -574,8 +557,6 @@ function BioGuide() {
             </div>
           </div>
 
-          {/* NEW CHAT */}
-
           <button
             type="button"
             onClick={handleNewChat}
@@ -585,17 +566,13 @@ function BioGuide() {
           </button>
         </header>
 
-        {/* ================================= */}
-        {/* CHAT MESSAGE AREA */}
-        {/* ================================= */}
-
+        {/* CHAT MESSAGES */}
         <section
           ref={messagesContainerRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-slate-700/50 scrollbar-track-transparent"
         >
           {!activeConversation && messages.length === 0 ? (
             /* EMPTY STATE */
-
             <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-5 py-8 text-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-500/30 bg-indigo-600/20 text-2xl">
                 🧠
@@ -609,8 +586,6 @@ function BioGuide() {
                 Talk about your training, recovery, stress, motivation, or
                 mental wellness.
               </p>
-
-              {/* MODULES */}
 
               <div className="mt-6 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
                 {SUGGESTED_MODULES.map((module) => (
@@ -632,8 +607,7 @@ function BioGuide() {
               </div>
             </div>
           ) : (
-            /* MESSAGES */
-
+            /* MESSAGES LIST */
             <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
               {messages.map((msg, index) => {
                 const isUser = msg.role === "user";
@@ -650,8 +624,6 @@ function BioGuide() {
                         isUser ? "items-end" : "items-start"
                       }`}
                     >
-                      {/* MESSAGE */}
-
                       <div
                         className={`rounded-2xl px-4 py-3 ${
                           isUser
@@ -659,12 +631,10 @@ function BioGuide() {
                             : "rounded-bl-none border border-slate-700/50 bg-slate-800/90 text-slate-100"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words text-xs leading-relaxed">
+                        <p className="whitespace-pre-wrap wrap-break-words text-xs leading-relaxed">
                           {msg.content}
                         </p>
                       </div>
-
-                      {/* TIME */}
 
                       {(msg.created_at || msg.timestamp) && (
                         <p
@@ -680,16 +650,13 @@ function BioGuide() {
                 );
               })}
 
-              {/* TYPING */}
-
+              {/* TYPING INDICATOR */}
               {loading && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl rounded-bl-none border border-slate-700/50 bg-slate-800/80 px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400" />
-
                       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:150ms]" />
-
                       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:300ms]" />
                     </div>
                   </div>
@@ -701,10 +668,7 @@ function BioGuide() {
           )}
         </section>
 
-        {/* ================================= */}
-        {/* ERROR */}
-        {/* ================================= */}
-
+        {/* ERROR DISPLAY */}
         {error && (
           <div className="shrink-0 border-t border-red-900/50 bg-red-950/40 px-4 py-2.5 sm:px-5">
             <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
@@ -723,10 +687,7 @@ function BioGuide() {
           </div>
         )}
 
-        {/* ================================= */}
-        {/* INPUT */}
-        {/* ================================= */}
-
+        {/* INPUT BOX */}
         <div className="shrink-0 border-t border-slate-800/80 bg-slate-900/80 p-3 backdrop-blur-md sm:p-4">
           <div className="mx-auto max-w-3xl">
             <div className="relative rounded-2xl border border-slate-700/80 bg-slate-950 transition-colors focus-within:border-indigo-500">
@@ -745,8 +706,6 @@ function BioGuide() {
                 className="w-full resize-none bg-transparent px-4 py-3 pr-20 text-xs text-white outline-none placeholder:text-slate-500 disabled:opacity-50"
               />
 
-              {/* CLEAR */}
-
               {message.length > 0 && (
                 <button
                   type="button"
@@ -758,8 +717,6 @@ function BioGuide() {
                 </button>
               )}
 
-              {/* SEND */}
-
               <button
                 type="button"
                 onClick={() => handleSendMessage()}
@@ -769,8 +726,6 @@ function BioGuide() {
                 {loading ? "..." : "Send"}
               </button>
             </div>
-
-            {/* FOOTER */}
 
             <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-slate-500">
               <span className="hidden sm:inline">
@@ -795,5 +750,3 @@ function BioGuide() {
     </div>
   );
 }
-
-export default BioGuide;

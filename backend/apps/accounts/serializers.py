@@ -17,7 +17,6 @@ class RegisterSerializer(serializers.ModelSerializer):
     
     return user
   
-  
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()
@@ -48,7 +47,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = [
             'avatar', 'email', 'username', 'is_counselor',
             'sport', 'team', 'position', 'personal_goals', 'preferences', 'age' , 'phone_number',
-    'email_notifications', 'reminder_notifications', 'theme_preference', 'profile_visibility'
+    'email_notifications', 'reminder_notifications', 'theme_preference', 'profile_visibility' , 'xp' , 'level' , 'streak'
         ]
 
     def update(self, instance, validated_data):

@@ -1,7 +1,10 @@
 import axios from "axios";
 
+// Environment variable se directly base URL read ho raha hai
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/auth/",
+  baseURL: `${BASE_URL}/auth/`,
 });
 
 // Request Interceptor to attach Bearer token automatically
