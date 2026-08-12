@@ -22,10 +22,7 @@ class DashboardOverviewAPIView(APIView):
             user=user
         )
 
-        # ==================================================
         # USER SUMMARY
-        # ==================================================
-
         user_summary = {
             "username": user.username,
             "first_name": user.first_name,
@@ -39,9 +36,7 @@ class DashboardOverviewAPIView(APIView):
             "streak": profile.streak,
         }
 
-        # ==================================================
         # TODAY'S GOAL
-        # ==================================================
 
         todays_goal = DailyGoal.objects.filter(
             user=user,
@@ -62,7 +57,7 @@ class DashboardOverviewAPIView(APIView):
                 "category": getattr(
                     todays_goal,
                     "category",
-                    "General"
+                    "Recovery"
                 ),
             }
         else:
@@ -75,12 +70,7 @@ class DashboardOverviewAPIView(APIView):
                 "category": "Mindfulness",
             }
 
-        # ==================================================
         # TODAY'S MOOD
-        # ==================================================
-
-        # IMPORTANT:
-        # created_at is a DateTimeField, therefore use __date
         today_mood = (
             MoodLog.objects
             .filter(
@@ -114,10 +104,7 @@ class DashboardOverviewAPIView(APIView):
             "exhausted": "😫",
         }
 
-        # ==================================================
         # TODAY MOOD RESPONSE
-        # ==================================================
-
         if today_mood:
             mood_key = today_mood.mood
 
@@ -161,10 +148,7 @@ class DashboardOverviewAPIView(APIView):
                 "created_at": None,
             }
 
-        # ==================================================
         # MOOD TREND
-        # ==================================================
-
         trend = []
 
         for mood in reversed(recent_moods):
@@ -194,20 +178,14 @@ class DashboardOverviewAPIView(APIView):
             "trend": trend,
         }
 
-        # ==================================================
         # AI GUIDE
-        # ==================================================
-
         ai_guide = {
             "prompt": (
                 "How to stay focused under pressure?"
             ),
         }
 
-        # ==================================================
         # QUICK MODULES
-        # ==================================================
-
         quick_modules = [
             {
                 "id": 1,
@@ -252,10 +230,7 @@ class DashboardOverviewAPIView(APIView):
             },
         ]
 
-        # ==================================================
         # FINAL RESPONSE
-        # ==================================================
-
         return Response({
             "user_summary": user_summary,
             "todays_goal": goal_data,

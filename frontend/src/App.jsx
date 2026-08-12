@@ -16,6 +16,7 @@ import BioGuide from "./pages/BioGuide";
 import SoundTherapy from "./pages/SoundTherapy";
 import Affirmations from "./pages/Affirmations";
 
+
 // Route Protection & Layout
 import ProtectedRoute from "./components/ProtectedRoutes";
 import DashboardLayout from "./components/layout/DashboardLayout";
@@ -41,12 +42,22 @@ function App() {
           <Route path="/sound-therapy" element={<SoundTherapy />} />
           <Route path="/affirmations" element={<Affirmations />} />
           <Route path="/bio-guide" element={<BioGuide />} />
-
-          {/* MOOD CHECK-IN ACTIVITY ALIASES (Fixes Audit Report Broken Routes) */}
-          <Route path="/activities/sound-therapy" element={<Navigate to="/sound-therapy" replace />} />
-          <Route path="/activities/bio-guide" element={<Navigate to="/bio-guide" replace />} />
-          <Route path="/activities/daily-goals" element={<Navigate to="/goals" replace />} />
-          <Route path="/activities/goals" element={<Navigate to="/goals" replace />} />
+          <Route
+            path="/activities/sound-therapy"
+            element={<Navigate to="/sound-therapy" replace />}
+          />
+          <Route
+            path="/activities/bio-guide"
+            element={<Navigate to="/bio-guide" replace />}
+          />
+          <Route
+            path="/activities/daily-goals"
+            element={<Navigate to="/goals" replace />}
+          />
+          <Route
+            path="/activities/goals"
+            element={<Navigate to="/goals" replace />}
+          />
         </Route>
       </Route>
 

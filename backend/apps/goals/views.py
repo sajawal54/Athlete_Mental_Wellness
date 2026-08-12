@@ -79,12 +79,12 @@ class DailyGoalToggleView(APIView):
 
             xp_gained = 0
 
-            # Incomplete -> Complete
+            # incomplete -> Conplete
             if not was_completed and goal.is_completed:
                 profile.add_xp(GOAL_XP_REWARD)
                 xp_gained = GOAL_XP_REWARD
 
-            # Complete -> Incomplete
+            # complete -> incomplete
             elif was_completed and not goal.is_completed:
                 profile.add_xp(-GOAL_XP_REWARD)
                 xp_gained = -GOAL_XP_REWARD

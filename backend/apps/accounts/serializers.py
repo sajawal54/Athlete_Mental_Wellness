@@ -16,7 +16,6 @@ class RegisterSerializer(serializers.ModelSerializer):
     user = User.objects.create_user(username = validated_data["username"] , email = validated_data["email"] , password = validated_data["password"] ,is_counselor = validated_data.get('is_counselor', False))
     
     return user
-  
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()

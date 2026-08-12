@@ -102,10 +102,10 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
                   to={item.path}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    group flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition-all duration-200 relative
+                    group flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold  transition-all duration-200 relative  
                     ${
                       active
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-bold translate-x-1"
+                        ? "bg-indigo-600 text-white  shadow-lg shadow-indigo-600/30 font-bold translate-x-1"
                         : "hover:bg-slate-900 text-slate-400 hover:text-white hover:translate-x-1 border border-transparent hover:border-slate-800"
                     }
                   `}

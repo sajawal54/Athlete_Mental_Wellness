@@ -4,10 +4,17 @@ from .serializers import AffirmationSerializer
 from rest_framework import generics , permissions , status
 from rest_framework.views import APIView
 from apps.bio_guide.groq_service import ask_groq
+from rest_framework.pagination import PageNumberPagination
+
+
+class AffirmationPagination(PageNumberPagination):
+    page_size = 2
+    page_query_param = "page"
 
 class AffirmationListView(generics.ListAPIView):
   serializer_class = AffirmationSerializer
   permission_classes = [permissions.IsAuthenticated]
+  pagination_class = AffirmationPagination
   
   def get_queryset(self):
     return Affirmation.objects.filter(user=self.request.user).order_by("-created_at")
@@ -46,6 +53,7 @@ class AffirmationAPICreateView(APIView):
     
     text = text.strip() 
     
+    
     affirmation = Affirmation.objects.create(user=request.user , text=text , is_favorite=False)
     
     serializer = AffirmationSerializer(affirmation , context={"request" : request})
@@ -70,6 +78,16 @@ class AffirmationUpdateView(APIView):
     
     return Response({'id' : affirmations.id ,
                      "is_favorite" : affirmations.is_favorite} , status=status.HTTP_200_OK  )
-      
+ 
+class AffirmationHistoryClearView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        Affirmation.objects.filter(user=request.user).delete()
+
+        return Response(
+            {"message": "Affirmation history cleared successfully"},
+            status=status.HTTP_200_OK
+        )     
     
       

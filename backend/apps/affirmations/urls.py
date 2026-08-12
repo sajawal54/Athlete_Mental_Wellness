@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     AffirmationAPICreateView,
     AffirmationListView,
-    AffirmationUpdateView,
+    AffirmationUpdateView, AffirmationHistoryClearView
 )
 
 urlpatterns = [
@@ -23,4 +23,6 @@ urlpatterns = [
         AffirmationUpdateView.as_view(),
         name="update-affirmation",
     ),
+    
+    path("delete/" , AffirmationHistoryClearView.as_view() , name="delete-affirmaton")
 ]

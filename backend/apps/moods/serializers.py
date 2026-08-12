@@ -6,6 +6,7 @@ class MoodLogSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.username')
 
     class Meta:
+        
         model = MoodLog
         fields = ['id', 'user', 'mood', 'emoji', 'energy_level', 'notes', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']

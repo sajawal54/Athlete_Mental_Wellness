@@ -3,11 +3,17 @@ from django.utils import timezone
 
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-
+from rest_framework.views import APIView
 from .models import MoodLog
 from .serializers import MoodLogSerializer
 from apps.accounts.models import Profile
+from rest_framework.pagination import PageNumberPagination
 
+
+    
+class MoodPagination(PageNumberPagination):
+    page_size = 2
+    page_query_param = "page"
 
 def get_ai_message(mood):
     messages = {
@@ -42,11 +48,13 @@ def get_ai_message(mood):
 class MoodLogListCreateView(generics.ListCreateAPIView):
     serializer_class = MoodLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MoodPagination
 
     def get_queryset(self):
         return MoodLog.objects.filter(
             user=self.request.user
         ).order_by("-created_at")
+        
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -111,4 +119,15 @@ class MoodLogDetailView(generics.DestroyAPIView):
     def get_queryset(self):
         return MoodLog.objects.filter(
             user=self.request.user
+        )
+        
+class MoodHistoryClearView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        MoodLog.objects.filter(user=request.user).delete()
+
+        return Response(
+            {"message": "Mood history cleared successfully"},
+            status=status.HTTP_204_NO_CONTENT
         )

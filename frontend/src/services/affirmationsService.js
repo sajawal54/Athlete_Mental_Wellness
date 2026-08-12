@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// Direct read from environment variables - NO hardcoded fallback strings
+// Direct read from environment variables
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const API = axios.create({
@@ -13,12 +13,13 @@ API.interceptors.request.use(
     const token = localStorage.getItem("accessToken");
 
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Generate a new AI affirmation
@@ -30,16 +31,22 @@ export const generateAffirmation = async (category) => {
   return response.data;
 };
 
-// Get affirmation history
+// Get paginated affirmation history
 export const getAffirmationHistory = async (page = 1) => {
   const response = await API.get(`history/?page=${page}`);
-
   return response.data;
 };
 
 // Toggle favorite
 export const toggleFavorite = async (id) => {
   const response = await API.patch(`${id}/favorite/`);
-
   return response.data;
 };
+
+// Clear all affirmation history
+export const clearAffirmationHistory = async () => {
+  const response = await API.delete("delete/");
+  return response.data;
+};
+
+export default API;

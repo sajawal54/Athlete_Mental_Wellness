@@ -240,9 +240,7 @@ export default function Goals() {
               Complete a goal and earn +{GOAL_XP_REWARD} XP.
             </p>
 
-            <p className="mt-0.5 text-xs opacity-80">
-              XP is calculated and awarded by the backend.
-            </p>
+
           </div>
         </div>
 

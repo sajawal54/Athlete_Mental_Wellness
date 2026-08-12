@@ -1,6 +1,6 @@
-import axios from 'axios';
+import axios from "axios";
 
-// Environment variable se directly base URL read ho raha hai
+// Environment variable se API base URL read hoga
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // Base API configuration for Mood Endpoints
@@ -8,41 +8,43 @@ const API = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// Interceptor: Requests se pehle accessToken attach karega
+// Attach JWT access token
 API.interceptors.request.use(
   (config) => {
-    // Exact key from your localStorage
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem("accessToken");
 
     if (token) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Access Token Attached successfully!');
-    } else {
-      console.warn('Access Token not found in localStorage');
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 export const moodService = {
-  // 1. Fetch history/all logged mood entries
-  getMoods: async () => {
-    const response = await API.get('moods/');
+  // 1. Fetch paginated mood history
+  getMoods: async (page = 1) => {
+    const response = await API.get(`moods/?page=${page}`);
     return response.data;
   },
 
-  // 2. Submit/Save new check-in entry
+  // 2. Submit new mood check-in
   addMood: async (data) => {
-    const response = await API.post('moods/', data);
+    const response = await API.post("moods/", data);
     return response.data;
   },
 
-  // 3. Delete a log entry by ID
+  // 3. Delete one mood by ID
   deleteMood: async (id) => {
     const response = await API.delete(`moods/${id}/`);
+    return response.data;
+  },
+
+  // 4. Clear complete mood history
+  clearMoods: async () => {
+    const response = await API.delete("moods/delete/");
     return response.data;
   },
 };
