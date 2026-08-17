@@ -8,6 +8,7 @@ from rest_framework import status, permissions
 from .models import DailyGoal
 from .serializers import DailyGoalSerializer
 from apps.accounts.models import Profile
+from apps.gamification.service import award_xp
 
 
 GOAL_XP_REWARD = 100
@@ -18,7 +19,6 @@ class DailyGoalListCreateView(APIView):
 
     def get(self, request):
         today = timezone.localdate()
-
         goals = DailyGoal.objects.filter(
             user=request.user,
             created_at=today
@@ -81,12 +81,12 @@ class DailyGoalToggleView(APIView):
 
             # incomplete -> Conplete
             if not was_completed and goal.is_completed:
-                profile.add_xp(GOAL_XP_REWARD)
+                xp_result = award_xp(user=request.user , amount=GOAL_XP_REWARD , source="daily_goal" , description=f"Completed Daily Goal : {goal.title}")
                 xp_gained = GOAL_XP_REWARD
 
             # complete -> incomplete
             elif was_completed and not goal.is_completed:
-                profile.add_xp(-GOAL_XP_REWARD)
+                xp_result = award_xp(user=request.user , amount=-GOAL_XP_REWARD , source="daily_goal_reversal" , description=f"Reversed XP for incomplete goal   : {goal.title}")
                 xp_gained = -GOAL_XP_REWARD
 
             profile.refresh_from_db()

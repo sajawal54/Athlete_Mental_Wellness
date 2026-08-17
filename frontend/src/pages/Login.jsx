@@ -140,7 +140,7 @@ function Login() {
                     },
                   })}
                   placeholder="Enter email"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 dark:border-slate-800 dark:bg-slate-950 dark:text-black dark:focus:border-indigo-500 dark:focus:ring-indigo-900/40"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 dark:border-slate-800 dark:bg-white dark:text-black dark:focus:border-indigo-500 dark:focus:ring-indigo-900/40"
                 />
               </div>
 

@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/sound-therapy/", include("apps.sound_therapy.urls")),
     path("api/affirmations/" , include("apps.affirmations.urls")),
     path("api/dashboard/", include("apps.dashboard.urls")),
+    path("api/gamification/" , include("apps.gamification.urls"))
     
 ]
 

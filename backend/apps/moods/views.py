@@ -4,16 +4,19 @@ from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import MoodLog
-from .serializers import MoodLogSerializer
-from apps.accounts.models import Profile
 from rest_framework.pagination import PageNumberPagination
 
+from .models import MoodLog
+from .serializers import MoodLogSerializer
 
-    
+from apps.accounts.models import Profile
+from apps.gamification.service import award_xp
+
+
 class MoodPagination(PageNumberPagination):
     page_size = 2
     page_query_param = "page"
+
 
 def get_ai_message(mood):
     messages = {
@@ -54,13 +57,11 @@ class MoodLogListCreateView(generics.ListCreateAPIView):
         return MoodLog.objects.filter(
             user=self.request.user
         ).order_by("-created_at")
-        
 
     def create(self, request, *args, **kwargs):
         user = request.user
         today = timezone.localdate()
 
-        # One mood check-in per user per day
         already_checked_in = MoodLog.objects.filter(
             user=user,
             created_at__date=today
@@ -76,21 +77,28 @@ class MoodLogListCreateView(generics.ListCreateAPIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+            
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
+
+            # Save mood check-in
             mood_obj = serializer.save(user=user)
 
+            # Centralized XP system
+            xp_result = award_xp(
+                user=user,
+                amount=120,
+                source="mood_checkin",
+                description="Completed daily mood check-in"
+            )
+
+            # Profile is still responsible for streak
             profile, _ = Profile.objects.get_or_create(
                 user=user
             )
 
-            # Mood check-in reward
-            profile.add_xp(80)
-
-            # Update daily streak
             profile.update_streak(today)
 
             profile.refresh_from_db()
@@ -101,9 +109,9 @@ class MoodLogListCreateView(generics.ListCreateAPIView):
             mood_obj.mood
         )
 
-        response_data["xp_gained"] = 80
-        response_data["new_total_xp"] = profile.xp
-        response_data["level"] = profile.level
+        response_data["xp_gained"] = 120
+        response_data["new_total_xp"] = xp_result["xp"]
+        response_data["level"] = xp_result["level"]
         response_data["streak"] = profile.streak
 
         return Response(
@@ -120,12 +128,15 @@ class MoodLogDetailView(generics.DestroyAPIView):
         return MoodLog.objects.filter(
             user=self.request.user
         )
-        
+
+
 class MoodHistoryClearView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request):
-        MoodLog.objects.filter(user=request.user).delete()
+        MoodLog.objects.filter(
+            user=request.user
+        ).delete()
 
         return Response(
             {"message": "Mood history cleared successfully"},

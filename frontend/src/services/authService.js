@@ -1,13 +1,12 @@
 import axios from "axios";
 
-// Environment variable se directly base URL read ho raha hai
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL; // e.g., 'http://127.0.0.1:8000/api'
 
 const API = axios.create({
-  baseURL: `${BASE_URL}/auth/`,
+  baseURL: BASE_URL,
 });
 
-// Request Interceptor to attach Bearer token automatically
+// Request Interceptor: Key 'accessToken' hi use karein
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
@@ -16,32 +15,45 @@ API.interceptors.request.use(
     }
     return config;
   },
+  (error) => Promise.reject(error)
+);
+
+// Response Interceptor: Key match karein aur loop rokein
+API.interceptors.response.use(
+  (response) => response,
   (error) => {
+    if (error.response && error.response.status === 401) {
+      // Key same hone chahiye
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+
+      // Infinite redirect loop se bachne ke liye check
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
     return Promise.reject(error);
   }
 );
 
-// Register User
+// Auth Specific Calls (Path explicitly pass karein)
 export const registerUser = async (userData) => {
-  const response = await API.post("register/", userData);
+  const response = await API.post("/auth/register/", userData);
   return response.data;
 };  
 
-// Login User
 export const loginUser = async (userData) => {
-  const response = await API.post("login/", userData);
+  const response = await API.post("/auth/login/", userData);
   return response.data;
 };
 
-// Forgot Password
 export const forgotPassword = async (email) => {
-  const response = await API.post("password-reset/", { email });
+  const response = await API.post("/auth/password-reset/", { email });
   return response.data;
 };
 
-// Reset Password
 export const resetPassword = async (data) => {
-  const response = await API.post("password-reset-confirm/", data);
+  const response = await API.post("/auth/password-reset-confirm/", data);
   return response.data;
 };
 

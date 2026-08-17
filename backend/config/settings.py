@@ -24,9 +24,11 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     "apps.accounts",
 "apps.moods",
+"apps.gamification",
 "apps.goals",
 "apps.affirmations",
 "apps.dashboard",
+"apps.wellness",
 "apps.sound_therapy",
 "apps.bio_guide",
     "rest_framework",

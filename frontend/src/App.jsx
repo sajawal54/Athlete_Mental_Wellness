@@ -1,12 +1,10 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
-// Auth Pages
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
-// Main Pages
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -15,23 +13,22 @@ import Goals from "./pages/Goals";
 import BioGuide from "./pages/BioGuide";
 import SoundTherapy from "./pages/SoundTherapy";
 import Affirmations from "./pages/Affirmations";
+import Gamification from "./pages/Gamification";
+import TrophyRoom from "./pages/TrophyRoom";
 
-
-// Route Protection & Layout
 import ProtectedRoute from "./components/ProtectedRoutes";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
 function App() {
   return (
     <Routes>
-      {/* PUBLIC ROUTES */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      {/* PROTECTED ROUTES */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
@@ -42,6 +39,9 @@ function App() {
           <Route path="/sound-therapy" element={<SoundTherapy />} />
           <Route path="/affirmations" element={<Affirmations />} />
           <Route path="/bio-guide" element={<BioGuide />} />
+          <Route path="/gamification" element={<Gamification />} />
+          <Route path="/trophy-room" element={<TrophyRoom />} />
+
           <Route
             path="/activities/sound-therapy"
             element={<Navigate to="/sound-therapy" replace />}
@@ -58,10 +58,17 @@ function App() {
             path="/activities/goals"
             element={<Navigate to="/goals" replace />}
           />
+          <Route
+            path="/activities/trophy-room"
+            element={<Navigate to="/trophy-room" replace />}
+          />
+          <Route
+            path="/activities/progress-analytics"
+            element={<Navigate to="/progress-analytics" replace />}
+          />
         </Route>
       </Route>
 
-      {/* FALLBACK ROUTE */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

@@ -12,7 +12,7 @@ import {
 
 import { moodService } from "../services/moodService";
 
-const CHECKIN_XP_REWARD = 80;
+const CHECKIN_XP_REWARD = 120;
 
 const MOOD_OPTIONS = [
   {

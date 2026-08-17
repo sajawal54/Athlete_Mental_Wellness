@@ -28,7 +28,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     { name: "Gamification", path: "/gamification", icon: TrophyIcon },
     { name: "Wellness Modules", path: "/modules", icon: BookOpenIcon },
     { name: "Trophy Room", path: "/trophy-room", icon: StarIcon },
-    { name: "Progress Analytics", path: "/progress", icon: ChartBarIcon },
     { name: "Emergency Support", path: "/support", icon: ShieldExclamationIcon },
     { name: "Settings", path: "/settings", icon: Cog6ToothIcon },
   ];
