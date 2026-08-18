@@ -27,8 +27,8 @@ INSTALLED_APPS = [
 "apps.gamification",
 "apps.goals",
 "apps.affirmations",
-"apps.dashboard",
 "apps.wellness",
+"apps.dashboard",
 "apps.sound_therapy",
 "apps.bio_guide",
     "rest_framework",
@@ -92,12 +92,16 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-
-        "NAME": BASE_DIR / "db.sqlite3",
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+        # Add the options dictionary below
+        'OPTIONS': {
+            'timeout': 20,  # Timeout in seconds
+        },
     }
 }
+
 
 
 

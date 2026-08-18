@@ -8,7 +8,6 @@ import {
   TrophyIcon,
   CheckBadgeIcon,
   StarIcon,
-  ChartBarIcon,
   ShieldExclamationIcon,
   Cog6ToothIcon,
   XMarkIcon,

@@ -40,7 +40,6 @@ import {
   claimRewardAPI,
 } from "../services/gamificationService";
 
-
 // ============================================================
 // CONSTANTS
 // ============================================================
@@ -48,7 +47,6 @@ import {
 const XP_PER_LEVEL = 100000;
 
 const EMPTY_ARRAY = [];
-
 
 // ============================================================
 // HELPERS
@@ -93,7 +91,6 @@ const formatShortDate = (date) => {
   });
 };
 
-
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -111,7 +108,6 @@ export default function GamificationDashboard() {
 
   const [error, setError] = useState("");
 
-
   // ----------------------------------------------------------
   // NAVIGATION
   // ----------------------------------------------------------
@@ -121,7 +117,6 @@ export default function GamificationDashboard() {
   const [badgeFilter, setBadgeFilter] = useState("all");
 
   const [rewardFilter, setRewardFilter] = useState("all");
-
 
   // ----------------------------------------------------------
   // XP HISTORY
@@ -133,16 +128,13 @@ export default function GamificationDashboard() {
 
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
 
-  const [loadingMoreHistory, setLoadingMoreHistory] =
-    useState(false);
-
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
 
   // ----------------------------------------------------------
   // REWARD
   // ----------------------------------------------------------
 
   const [claimingReward, setClaimingReward] = useState(null);
-
 
   // ==========================================================
   // UNIQUE HISTORY
@@ -153,8 +145,7 @@ export default function GamificationDashboard() {
 
     return items.filter((item) => {
       const identifier =
-        item?.id ||
-        `${item?.created_at}-${item?.amount}-${item?.description}`;
+        item?.id || `${item?.created_at}-${item?.amount}-${item?.description}`;
 
       if (seen.has(identifier)) {
         return false;
@@ -165,7 +156,6 @@ export default function GamificationDashboard() {
       return true;
     });
   }, []);
-
 
   // ==========================================================
   // FETCH ALL GAMIFICATION DATA
@@ -186,50 +176,44 @@ export default function GamificationDashboard() {
 
         setData(response);
 
-        const rawHistory = Array.isArray(
-          response?.xp_history
-        )
+        const rawHistory = Array.isArray(response?.xp_history)
           ? response.xp_history
           : [];
 
-        const uniqueHistory =
-          getUniqueHistory(rawHistory);
+        const uniqueHistory = getUniqueHistory(rawHistory);
 
         setXpHistory(uniqueHistory.slice(0, 20));
 
         setHistoryPage(1);
 
-        setHasMoreHistory(
-          rawHistory.length > 20
-        );
+        setHasMoreHistory(rawHistory.length > 20);
       } catch (err) {
-        console.error(
-          "Gamification Dashboard Error:",
-          err
-        );
+        console.error("Gamification Dashboard Error:", err);
 
         setError(
           err?.response?.data?.detail ||
             err?.response?.data?.message ||
-            "Unable to load gamification data."
+            "Unable to load gamification data.",
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [getUniqueHistory]
+    [getUniqueHistory],
   );
-
 
   // ==========================================================
   // INITIAL LOAD
   // ==========================================================
 
   useEffect(() => {
+    // API synchronization on initial component load.
+    // The API function updates component state after the request.
+    // This rule is intentionally disabled for this specific call.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDashboard();
   }, [fetchDashboard]);
-
 
   // ==========================================================
   // SAFE DATA EXTRACTION
@@ -240,9 +224,7 @@ export default function GamificationDashboard() {
   }, [data]);
 
   const badges = useMemo(() => {
-    return Array.isArray(data?.badges)
-      ? data.badges
-      : EMPTY_ARRAY;
+    return Array.isArray(data?.badges) ? data.badges : EMPTY_ARRAY;
   }, [data]);
 
   const earnedBadges = useMemo(() => {
@@ -252,17 +234,12 @@ export default function GamificationDashboard() {
   }, [data]);
 
   const rewards = useMemo(() => {
-    return Array.isArray(data?.rewards)
-      ? data.rewards
-      : EMPTY_ARRAY;
+    return Array.isArray(data?.rewards) ? data.rewards : EMPTY_ARRAY;
   }, [data]);
 
   const userRewards = useMemo(() => {
-    return Array.isArray(data?.user_rewards)
-      ? data.user_rewards
-      : EMPTY_ARRAY;
+    return Array.isArray(data?.user_rewards) ? data.user_rewards : EMPTY_ARRAY;
   }, [data]);
-
 
   // ==========================================================
   // CORE GAMIFICATION VALUES
@@ -270,39 +247,22 @@ export default function GamificationDashboard() {
 
   const currentXP = Number(profile?.xp || 0);
 
-  const currentStreak = Number(
-    profile?.streak || 0
-  );
+  const currentStreak = Number(profile?.streak || 0);
 
-  const backendLevel = Number(
-    profile?.level || 0
-  );
+  const backendLevel = Number(profile?.level || 0);
 
-  const calculatedLevel =
-    Math.floor(
-      currentXP / XP_PER_LEVEL
-    ) + 1;
+  const calculatedLevel = Math.floor(currentXP / XP_PER_LEVEL) + 1;
 
-  const currentLevel = Math.max(
-    backendLevel,
-    calculatedLevel
-  );
+  const currentLevel = Math.max(backendLevel, calculatedLevel);
 
-  const xpInCurrentLevel =
-    currentXP % XP_PER_LEVEL;
+  const xpInCurrentLevel = currentXP % XP_PER_LEVEL;
 
-  const xpNeededForNextLevel =
-    XP_PER_LEVEL - xpInCurrentLevel;
+  const xpNeededForNextLevel = XP_PER_LEVEL - xpInCurrentLevel;
 
   const levelProgressPercent = Math.min(
     100,
-    Math.max(
-      0,
-      (xpInCurrentLevel / XP_PER_LEVEL) *
-        100
-    )
+    Math.max(0, (xpInCurrentLevel / XP_PER_LEVEL) * 100),
   );
-
 
   // ==========================================================
   // BADGES
@@ -311,33 +271,19 @@ export default function GamificationDashboard() {
   const earnedBadgeNames = useMemo(() => {
     return new Set(
       earnedBadges
-        .map(
-          (badge) =>
-            badge?.badge_name ||
-            badge?.name ||
-            badge?.title
-        )
-        .filter(Boolean)
+        .map((badge) => badge?.badge_name || badge?.name || badge?.title)
+        .filter(Boolean),
     );
   }, [earnedBadges]);
-
 
   const badgeStats = useMemo(() => {
     const earned = earnedBadges.length;
 
     const total = badges.length;
 
-    const locked = Math.max(
-      total - earned,
-      0
-    );
+    const locked = Math.max(total - earned, 0);
 
-    const percentage =
-      total > 0
-        ? Math.round(
-            (earned / total) * 100
-          )
-        : 0;
+    const percentage = total > 0 ? Math.round((earned / total) * 100) : 0;
 
     return {
       earned,
@@ -347,34 +293,21 @@ export default function GamificationDashboard() {
     };
   }, [badges, earnedBadges]);
 
-
   const filteredBadges = useMemo(() => {
     return badges.filter((badge) => {
-      const isEarned =
-        earnedBadgeNames.has(
-          badge?.name
-        );
+      const isEarned = earnedBadgeNames.has(badge?.name);
 
-      if (
-        badgeFilter === "earned"
-      ) {
+      if (badgeFilter === "earned") {
         return isEarned;
       }
 
-      if (
-        badgeFilter === "locked"
-      ) {
+      if (badgeFilter === "locked") {
         return !isEarned;
       }
 
       return true;
     });
-  }, [
-    badges,
-    earnedBadgeNames,
-    badgeFilter,
-  ]);
-
+  }, [badges, earnedBadgeNames, badgeFilter]);
 
   // ==========================================================
   // REWARDS
@@ -384,10 +317,7 @@ export default function GamificationDashboard() {
     const map = new Map();
 
     userRewards.forEach((item) => {
-      const name =
-        item?.reward_name ||
-        item?.reward?.name ||
-        item?.name;
+      const name = item?.reward_name || item?.reward?.name || item?.name;
 
       if (name) {
         map.set(name, item);
@@ -397,39 +327,22 @@ export default function GamificationDashboard() {
     return map;
   }, [userRewards]);
 
-
   const getRewardStatus = useCallback(
     (reward) => {
-      const rewardName =
-        reward?.name ||
-        reward?.reward_name;
+      const rewardName = reward?.name || reward?.reward_name;
 
-      const existingReward =
-        userRewardMap.get(
-          rewardName
-        );
+      const existingReward = userRewardMap.get(rewardName);
 
       if (existingReward) {
-        return (
-          existingReward.status ||
-          "claimed"
-        );
+        return existingReward.status || "claimed";
       }
 
-      const rewardXP = Number(
-        reward?.xp_cost || 0
-      );
+      const rewardXP = Number(reward?.xp_cost || 0);
 
-      return currentXP >= rewardXP
-        ? "available"
-        : "locked";
+      return currentXP >= rewardXP ? "available" : "locked";
     },
-    [
-      userRewardMap,
-      currentXP,
-    ]
+    [userRewardMap, currentXP],
   );
-
 
   const rewardStats = useMemo(() => {
     let claimed = 0;
@@ -437,17 +350,11 @@ export default function GamificationDashboard() {
     let locked = 0;
 
     rewards.forEach((reward) => {
-      const status =
-        getRewardStatus(reward);
+      const status = getRewardStatus(reward);
 
-      if (
-        status === "claimed" ||
-        status === "redeemed"
-      ) {
+      if (status === "claimed" || status === "redeemed") {
         claimed += 1;
-      } else if (
-        status === "available"
-      ) {
+      } else if (status === "available") {
         available += 1;
       } else {
         locked += 1;
@@ -460,46 +367,27 @@ export default function GamificationDashboard() {
       locked,
       total: rewards.length,
     };
-  }, [
-    rewards,
-    getRewardStatus,
-  ]);
-
+  }, [rewards, getRewardStatus]);
 
   const filteredRewards = useMemo(() => {
     return rewards.filter((reward) => {
-      const status =
-        getRewardStatus(reward);
+      const status = getRewardStatus(reward);
 
-      if (
-        rewardFilter === "available"
-      ) {
+      if (rewardFilter === "available") {
         return status === "available";
       }
 
-      if (
-        rewardFilter === "claimed"
-      ) {
-        return (
-          status === "claimed" ||
-          status === "redeemed"
-        );
+      if (rewardFilter === "claimed") {
+        return status === "claimed" || status === "redeemed";
       }
 
-      if (
-        rewardFilter === "locked"
-      ) {
+      if (rewardFilter === "locked") {
         return status === "locked";
       }
 
       return true;
     });
-  }, [
-    rewards,
-    getRewardStatus,
-    rewardFilter,
-  ]);
-
+  }, [rewards, getRewardStatus, rewardFilter]);
 
   // ==========================================================
   // MILESTONE
@@ -540,21 +428,15 @@ export default function GamificationDashboard() {
     };
   }, [currentXP]);
 
-
   const milestoneProgress = Math.min(
     100,
-    (currentXP /
-      nextMilestone.target) *
-      100
+    (currentXP / nextMilestone.target) * 100,
   );
-
 
   const milestoneRemaining = Math.max(
     0,
-    nextMilestone.target -
-      currentXP
+    nextMilestone.target - currentXP,
   );
-
 
   // ==========================================================
   // XP CHART
@@ -574,15 +456,10 @@ export default function GamificationDashboard() {
       .reverse()
       .slice(-10)
       .map((item) => ({
-        date: formatShortDate(
-          item?.created_at
-        ),
-        xp: Number(
-          item?.amount || 0
-        ),
+        date: formatShortDate(item?.created_at),
+        xp: Number(item?.amount || 0),
       }));
   }, [xpHistory]);
-
 
   // ==========================================================
   // BADGE CHART
@@ -600,7 +477,6 @@ export default function GamificationDashboard() {
       },
     ];
   }, [badgeStats]);
-
 
   // ==========================================================
   // REWARD CHART
@@ -623,7 +499,6 @@ export default function GamificationDashboard() {
     ];
   }, [rewardStats]);
 
-
   // ==========================================================
   // WELLNESS RADAR
   // ==========================================================
@@ -632,34 +507,19 @@ export default function GamificationDashboard() {
     return [
       {
         subject: "XP",
-        value: Math.min(
-          100,
-          (currentXP /
-            500000) *
-            100
-        ),
+        value: Math.min(100, (currentXP / 500000) * 100),
       },
       {
         subject: "Streak",
-        value: Math.min(
-          100,
-          (currentStreak /
-            30) *
-            100
-        ),
+        value: Math.min(100, (currentStreak / 30) * 100),
       },
       {
         subject: "Badges",
-        value:
-          badgeStats.percentage,
+        value: badgeStats.percentage,
       },
       {
         subject: "Rewards",
-        value: Math.min(
-          100,
-          userRewards.length *
-            10
-        ),
+        value: Math.min(100, userRewards.length * 10),
       },
     ];
   }, [
@@ -669,7 +529,6 @@ export default function GamificationDashboard() {
     userRewards.length,
   ]);
 
-
   // ==========================================================
   // RECENT HISTORY
   // ==========================================================
@@ -678,129 +537,81 @@ export default function GamificationDashboard() {
     return [...xpHistory]
       .sort(
         (a, b) =>
-          new Date(
-            b?.created_at || 0
-          ) -
-          new Date(
-            a?.created_at || 0
-          )
+          new Date(b?.created_at || 0) -
+          new Date(a?.created_at || 0),
       )
       .slice(0, 6);
   }, [xpHistory]);
-
 
   // ==========================================================
   // LOAD MORE HISTORY
   // ==========================================================
 
-  const handleLoadMoreHistory =
-    async () => {
-      if (
-        loadingMoreHistory ||
-        !hasMoreHistory
-      ) {
-        return;
+  const handleLoadMoreHistory = async () => {
+    if (loadingMoreHistory || !hasMoreHistory) {
+      return;
+    }
+
+    try {
+      setLoadingMoreHistory(true);
+
+      const nextPage = historyPage + 1;
+
+      const response = await axios.get(
+        `/api/gamification/xp-history/?page=${nextPage}`,
+      );
+
+      const newResults = Array.isArray(response?.data?.results)
+        ? response.data.results
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+
+      if (newResults.length > 0) {
+        setXpHistory((prev) =>
+          getUniqueHistory([...prev, ...newResults]),
+        );
+
+        setHistoryPage(nextPage);
+
+        setHasMoreHistory(Boolean(response?.data?.next));
+      } else {
+        setHasMoreHistory(false);
       }
+    } catch (err) {
+      console.error("Load More History Error:", err);
 
-      try {
-        setLoadingMoreHistory(true);
-
-        const nextPage =
-          historyPage + 1;
-
-        const response =
-          await axios.get(
-            `/api/gamification/xp-history/?page=${nextPage}`
-          );
-
-        const newResults =
-          Array.isArray(
-            response?.data?.results
-          )
-            ? response.data.results
-            : Array.isArray(
-                response?.data
-              )
-              ? response.data
-              : [];
-
-        if (
-          newResults.length > 0
-        ) {
-          setXpHistory((prev) =>
-            getUniqueHistory([
-              ...prev,
-              ...newResults,
-            ])
-          );
-
-          setHistoryPage(
-            nextPage
-          );
-
-          setHasMoreHistory(
-            Boolean(
-              response?.data?.next
-            )
-          );
-        } else {
-          setHasMoreHistory(false);
-        }
-      } catch (err) {
-        console.error(
-          "Load More History Error:",
-          err
-        );
-
-        setError(
-          "Unable to load more XP history."
-        );
-      } finally {
-        setLoadingMoreHistory(
-          false
-        );
-      }
-    };
-
+      setError("Unable to load more XP history.");
+    } finally {
+      setLoadingMoreHistory(false);
+    }
+  };
 
   // ==========================================================
   // CLAIM REWARD
   // ==========================================================
 
-  const handleClaimReward =
-    async (reward) => {
-      try {
-        setClaimingReward(
-          reward.id
-        );
+  const handleClaimReward = async (reward) => {
+    try {
+      setClaimingReward(reward.id);
 
-        setError("");
+      setError("");
 
-        await claimRewardAPI(
-          reward.id
-        );
+      await claimRewardAPI(reward.id);
 
-        await fetchDashboard(true);
-      } catch (err) {
-        console.error(
-          "Claim Reward Error:",
-          err
-        );
+      await fetchDashboard(true);
+    } catch (err) {
+      console.error("Claim Reward Error:", err);
 
-        setError(
-          err?.response?.data
-            ?.message ||
-            err?.response?.data
-              ?.detail ||
-            "Unable to claim this reward."
-        );
-      } finally {
-        setClaimingReward(
-          null
-        );
-      }
-    };
-
+      setError(
+        err?.response?.data?.message ||
+          err?.response?.data?.detail ||
+          "Unable to claim this reward.",
+      );
+    } finally {
+      setClaimingReward(null);
+    }
+  };
 
   // ==========================================================
   // LOADING
@@ -810,38 +621,31 @@ export default function GamificationDashboard() {
     return (
       <div className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl animate-pulse space-y-6">
-
           <div className="h-16 w-80 rounded-2xl bg-slate-900" />
 
           <div className="h-64 rounded-3xl bg-slate-900" />
 
           <div className="grid gap-4 md:grid-cols-4">
-            {[1, 2, 3, 4].map(
-              (item) => (
-                <div
-                  key={item}
-                  className="h-32 rounded-2xl bg-slate-900"
-                />
-              )
-            )}
+            {[1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className="h-32 rounded-2xl bg-slate-900"
+              />
+            ))}
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {[1, 2, 3, 4].map(
-              (item) => (
-                <div
-                  key={item}
-                  className="h-80 rounded-3xl bg-slate-900"
-                />
-              )
-            )}
+            {[1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className="h-80 rounded-3xl bg-slate-900"
+              />
+            ))}
           </div>
-
         </div>
       </div>
     );
   }
-
 
   // ==========================================================
   // MAIN UI
@@ -849,17 +653,13 @@ export default function GamificationDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 lg:px-8">
-
       <div className="mx-auto max-w-7xl">
-
         {/* ====================================================
             HEADER
         ==================================================== */}
 
         <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-
           <div>
-
             <div className="mb-2 flex items-center gap-2">
               <TrophyIcon className="h-6 w-6 text-amber-400" />
 
@@ -873,36 +673,26 @@ export default function GamificationDashboard() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              Your complete wellness gamification
-              dashboard — XP, achievements, rewards,
-              consistency and progress in one place.
+              Your complete wellness gamification — XP, achievements,
+              rewards, consistency and progress in one place.
             </p>
-
           </div>
 
           <button
             type="button"
-            onClick={() =>
-              fetchDashboard(true)
-            }
+            onClick={() => fetchDashboard(true)}
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-amber-500/40 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             <ArrowPathIcon
               className={`h-4 w-4 ${
-                refreshing
-                  ? "animate-spin"
-                  : ""
+                refreshing ? "animate-spin" : ""
               }`}
             />
 
-            {refreshing
-              ? "Syncing..."
-              : "Sync Progress"}
+            {refreshing ? "Syncing..." : "Sync Progress"}
           </button>
-
         </header>
-
 
         {/* ====================================================
             ERROR
@@ -910,7 +700,6 @@ export default function GamificationDashboard() {
 
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4">
-
             <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
 
             <div>
@@ -922,31 +711,22 @@ export default function GamificationDashboard() {
                 {error}
               </p>
             </div>
-
           </div>
         )}
-
 
         {/* ====================================================
             LEVEL HERO
         ==================================================== */}
 
         <section className="relative mb-8 overflow-hidden rounded-3xl border border-amber-500/20 bg-linear-to-br from-amber-500/10 via-slate-900 to-slate-950 p-6 shadow-2xl">
-
           <div className="grid gap-8 lg:grid-cols-[1fr_1.5fr] lg:items-center">
-
-            {/* LEVEL */}
-
             <div>
-
               <div className="mb-5 flex items-center gap-4">
-
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-400 ring-4 ring-amber-500/5">
                   <AcademicCapIcon className="h-9 w-9" />
                 </div>
 
                 <div>
-
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-400">
                     Current Rank
                   </p>
@@ -954,9 +734,7 @@ export default function GamificationDashboard() {
                   <h2 className="text-2xl font-black">
                     Athlete Level {currentLevel}
                   </h2>
-
                 </div>
-
               </div>
 
               <div className="flex items-end gap-2">
@@ -970,22 +748,13 @@ export default function GamificationDashboard() {
               </div>
 
               <p className="mt-2 text-sm text-slate-400">
-                {formatNumber(
-                  xpNeededForNextLevel
-                )}{" "}
-                XP needed for Level{" "}
+                {formatNumber(xpNeededForNextLevel)} XP needed for Level{" "}
                 {currentLevel + 1}.
               </p>
-
             </div>
 
-
-            {/* LEVEL PROGRESS */}
-
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-
               <div className="mb-3 flex items-center justify-between">
-
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Level Progress
@@ -997,12 +766,8 @@ export default function GamificationDashboard() {
                 </div>
 
                 <span className="font-bold text-amber-400">
-                  {levelProgressPercent.toFixed(
-                    1
-                  )}
-                  %
+                  {levelProgressPercent.toFixed(1)}%
                 </span>
-
               </div>
 
               <div className="h-3 overflow-hidden rounded-full bg-slate-800">
@@ -1015,48 +780,29 @@ export default function GamificationDashboard() {
               </div>
 
               <div className="mt-3 flex justify-between text-xs">
-
                 <span className="text-slate-500">
-                  {formatNumber(
-                    xpInCurrentLevel
-                  )}{" "}
-                  XP
+                  {formatNumber(xpInCurrentLevel)} XP
                 </span>
 
                 <span className="font-semibold text-amber-300">
-                  {formatNumber(
-                    xpNeededForNextLevel
-                  )}{" "}
-                  remaining
+                  {formatNumber(xpNeededForNextLevel)} remaining
                 </span>
 
                 <span className="text-slate-500">
-                  {formatNumber(
-                    XP_PER_LEVEL
-                  )}
+                  {formatNumber(XP_PER_LEVEL)}
                 </span>
-
               </div>
-
             </div>
-
           </div>
-
         </section>
-
 
         {/* ====================================================
             SUMMARY CARDS
         ==================================================== */}
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
-          {/* XP */}
-
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
             <div className="flex items-center justify-between">
-
               <div className="rounded-xl bg-violet-500/10 p-3 text-violet-400">
                 <BoltIcon className="h-6 w-6" />
               </div>
@@ -1064,7 +810,6 @@ export default function GamificationDashboard() {
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Total XP
               </span>
-
             </div>
 
             <p className="mt-5 text-3xl font-black">
@@ -1074,16 +819,10 @@ export default function GamificationDashboard() {
             <p className="mt-1 text-xs text-slate-500">
               Experience Points
             </p>
-
           </div>
 
-
-          {/* STREAK */}
-
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
             <div className="flex items-center justify-between">
-
               <div className="rounded-xl bg-orange-500/10 p-3 text-orange-400">
                 <FireIcon className="h-6 w-6" />
               </div>
@@ -1091,7 +830,6 @@ export default function GamificationDashboard() {
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Consistency
               </span>
-
             </div>
 
             <p className="mt-5 text-3xl font-black">
@@ -1104,16 +842,10 @@ export default function GamificationDashboard() {
             <p className="mt-1 text-xs text-slate-500">
               Active daily streak
             </p>
-
           </div>
 
-
-          {/* BADGES */}
-
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
             <div className="flex items-center justify-between">
-
               <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-400">
                 <CheckBadgeIcon className="h-6 w-6" />
               </div>
@@ -1121,7 +853,6 @@ export default function GamificationDashboard() {
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Achievements
               </span>
-
             </div>
 
             <p className="mt-5 text-3xl font-black">
@@ -1135,16 +866,10 @@ export default function GamificationDashboard() {
             <p className="mt-1 text-xs text-slate-500">
               {badgeStats.locked} badges remaining
             </p>
-
           </div>
 
-
-          {/* REWARDS */}
-
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
             <div className="flex items-center justify-between">
-
               <div className="rounded-xl bg-purple-500/10 p-3 text-purple-400">
                 <GiftIcon className="h-6 w-6" />
               </div>
@@ -1152,7 +877,6 @@ export default function GamificationDashboard() {
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Rewards
               </span>
-
             </div>
 
             <p className="mt-5 text-3xl font-black">
@@ -1162,20 +886,15 @@ export default function GamificationDashboard() {
             <p className="mt-1 text-xs text-slate-500">
               {rewardStats.available} currently available
             </p>
-
           </div>
-
         </section>
-
 
         {/* ====================================================
             NAVIGATION
         ==================================================== */}
 
         <div className="mb-8 overflow-x-auto border-b border-slate-800">
-
           <div className="flex min-w-max">
-
             {[
               {
                 id: "overview",
@@ -1203,19 +922,15 @@ export default function GamificationDashboard() {
                 icon: ClockIcon,
               },
             ].map((tab) => {
-
               const Icon = tab.icon;
 
-              const active =
-                activeTab === tab.id;
+              const active = activeTab === tab.id;
 
               return (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() =>
-                    setActiveTab(tab.id)
-                  }
+                  onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition ${
                     active
                       ? "border-amber-400 text-amber-400"
@@ -1228,11 +943,8 @@ export default function GamificationDashboard() {
                 </button>
               );
             })}
-
           </div>
-
         </div>
-
 
         {/* ====================================================
             OVERVIEW
@@ -1240,17 +952,10 @@ export default function GamificationDashboard() {
 
         {activeTab === "overview" && (
           <section className="space-y-6">
-
-            {/* MILESTONE */}
-
             <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-
               <div className="rounded-3xl border border-amber-500/20 bg-linear-to-br from-amber-500/10 via-slate-900 to-slate-950 p-6">
-
                 <div className="flex items-start justify-between">
-
                   <div>
-
                     <p className="text-xs font-bold uppercase tracking-wider text-amber-400">
                       Next Milestone
                     </p>
@@ -1258,72 +963,44 @@ export default function GamificationDashboard() {
                     <h2 className="mt-2 text-2xl font-black">
                       {nextMilestone.name}
                     </h2>
-
                   </div>
 
                   <FlagIcon className="h-8 w-8 text-amber-400" />
-
                 </div>
 
                 <div className="mt-6">
-
                   <div className="mb-2 flex justify-between text-xs">
-
                     <span className="text-slate-400">
-                      {formatNumber(
-                        currentXP
-                      )}{" "}
-                      XP
+                      {formatNumber(currentXP)} XP
                     </span>
 
                     <span className="font-bold text-amber-400">
-                      {milestoneProgress.toFixed(
-                        1
-                      )}
-                      %
+                      {milestoneProgress.toFixed(1)}%
                     </span>
-
                   </div>
 
                   <div className="h-3 overflow-hidden rounded-full bg-slate-800">
-
                     <div
                       className="h-full rounded-full bg-linear-to-r from-amber-500 to-yellow-400"
                       style={{
                         width: `${milestoneProgress}%`,
                       }}
                     />
-
                   </div>
 
                   <div className="mt-3 flex justify-between text-xs">
-
                     <span className="text-slate-500">
-                      Target{" "}
-                      {formatNumber(
-                        nextMilestone.target
-                      )}{" "}
-                      XP
+                      Target {formatNumber(nextMilestone.target)} XP
                     </span>
 
                     <span className="font-semibold text-amber-300">
-                      {formatNumber(
-                        milestoneRemaining
-                      )}{" "}
-                      XP left
+                      {formatNumber(milestoneRemaining)} XP left
                     </span>
-
                   </div>
-
                 </div>
-
               </div>
 
-
-              {/* FOCUS */}
-
               <div className="rounded-3xl border border-violet-500/20 bg-linear-to-b from-violet-500/10 via-slate-900 to-slate-950 p-6">
-
                 <SparklesIcon className="h-8 w-8 text-violet-400" />
 
                 <p className="mt-5 text-xs font-bold uppercase tracking-wider text-violet-400">
@@ -1335,16 +1012,14 @@ export default function GamificationDashboard() {
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Continue completing wellness
-                  activities to increase XP,
-                  maintain your streak and unlock
-                  new achievements.
+                  Continue completing wellness activities to increase XP,
+                  maintain your streak and unlock new achievements.
                 </p>
 
                 <div className="mt-5 space-y-3">
-
                   <div className="flex items-center gap-3">
                     <CheckCircleIcon className="h-5 w-5 text-emerald-400" />
+
                     <span className="text-sm text-slate-300">
                       {badgeStats.earned} badges earned
                     </span>
@@ -1352,6 +1027,7 @@ export default function GamificationDashboard() {
 
                   <div className="flex items-center gap-3">
                     <FireIcon className="h-5 w-5 text-orange-400" />
+
                     <span className="text-sm text-slate-300">
                       {currentStreak} day streak
                     </span>
@@ -1359,24 +1035,17 @@ export default function GamificationDashboard() {
 
                   <div className="flex items-center gap-3">
                     <GiftIcon className="h-5 w-5 text-violet-400" />
+
                     <span className="text-sm text-slate-300">
                       {rewardStats.available} rewards available
                     </span>
                   </div>
-
                 </div>
-
               </div>
-
             </div>
 
-
-            {/* QUICK CHARTS */}
-
             <div className="grid gap-6 lg:grid-cols-2">
-
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
-
                 <div className="mb-4 flex items-center gap-2">
                   <BoltIcon className="h-5 w-5 text-amber-400" />
 
@@ -1386,15 +1055,8 @@ export default function GamificationDashboard() {
                 </div>
 
                 <div className="h-64">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-                    <AreaChart
-                      data={xpChartData}
-                    >
-
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={xpChartData}>
                       <defs>
                         <linearGradient
                           id="overviewXpGradient"
@@ -1435,12 +1097,9 @@ export default function GamificationDashboard() {
 
                       <Tooltip
                         contentStyle={{
-                          backgroundColor:
-                            "#0f172a",
-                          border:
-                            "1px solid #334155",
-                          borderRadius:
-                            "12px",
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
                         }}
                       />
 
@@ -1451,17 +1110,12 @@ export default function GamificationDashboard() {
                         strokeWidth={2}
                         fill="url(#overviewXpGradient)"
                       />
-
                     </AreaChart>
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
 
-
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5">
-
                 <div className="mb-4 flex items-center gap-2">
                   <ChartBarIcon className="h-5 w-5 text-cyan-400" />
 
@@ -1471,15 +1125,8 @@ export default function GamificationDashboard() {
                 </div>
 
                 <div className="h-64">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-                    <RadarChart
-                      data={radarData}
-                    >
-
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={radarData}>
                       <PolarGrid stroke="#334155" />
 
                       <PolarAngleAxis
@@ -1495,19 +1142,13 @@ export default function GamificationDashboard() {
                         fill="#22d3ee"
                         fillOpacity={0.25}
                       />
-
                     </RadarChart>
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
-
             </div>
-
           </section>
         )}
-
 
         {/* ====================================================
             ACHIEVEMENTS
@@ -1515,37 +1156,26 @@ export default function GamificationDashboard() {
 
         {activeTab === "achievements" && (
           <section>
-
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
               <div>
                 <h2 className="text-xl font-black">
                   Badges & Achievements
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Track everything you have unlocked
-                  and everything still ahead.
+                  Track everything you have unlocked and everything
+                  still ahead.
                 </p>
               </div>
 
               <div className="flex items-center gap-2 overflow-x-auto">
-
                 <FunnelIcon className="h-4 w-4 text-slate-500" />
 
-                {[
-                  "all",
-                  "earned",
-                  "locked",
-                ].map((filter) => (
+                {["all", "earned", "locked"].map((filter) => (
                   <button
                     key={filter}
                     type="button"
-                    onClick={() =>
-                      setBadgeFilter(
-                        filter
-                      )
-                    }
+                    onClick={() => setBadgeFilter(filter)}
                     className={`rounded-xl px-3 py-1.5 text-xs font-bold capitalize ${
                       badgeFilter === filter
                         ? "bg-amber-500 text-slate-950"
@@ -1555,115 +1185,84 @@ export default function GamificationDashboard() {
                     {filter}
                   </button>
                 ))}
-
               </div>
-
             </div>
 
-
-            {filteredBadges.length ===
-            0 ? (
+            {filteredBadges.length === 0 ? (
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-12 text-center">
-
                 <TrophyIcon className="mx-auto h-10 w-10 text-slate-700" />
 
                 <p className="mt-3 text-sm text-slate-500">
-                  No achievements match this
-                  filter.
+                  No achievements match this filter.
                 </p>
-
               </div>
             ) : (
-
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredBadges.map((badge) => {
+                  const isEarned = earnedBadgeNames.has(
+                    badge?.name,
+                  );
 
-                {filteredBadges.map(
-                  (badge) => {
-
-                    const isEarned =
-                      earnedBadgeNames.has(
-                        badge?.name
-                      );
-
-                    return (
-                      <div
-                        key={
-                          badge?.id ||
-                          badge?.name
-                        }
-                        className={`group rounded-2xl border p-5 transition ${
-                          isEarned
-                            ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50"
-                            : "border-slate-800 bg-slate-900/70 opacity-75 hover:opacity-100"
-                        }`}
-                      >
-
-                        <div className="flex items-start justify-between">
-
-                          <div
-                            className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                              isEarned
-                                ? "bg-emerald-500/15 text-emerald-400"
-                                : "bg-slate-800 text-slate-600"
-                            }`}
-                          >
-                            {isEarned ? (
-                              <TrophyIcon className="h-6 w-6" />
-                            ) : (
-                              <LockClosedIcon className="h-5 w-5" />
-                            )}
-                          </div>
-
-                          <span
-                            className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${
-                              isEarned
-                                ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                                : "border-slate-700 bg-slate-800 text-slate-500"
-                            }`}
-                          >
-                            {isEarned
-                              ? "Unlocked"
-                              : "Locked"}
-                          </span>
-
+                  return (
+                    <div
+                      key={badge?.id || badge?.name}
+                      className={`group rounded-2xl border p-5 transition ${
+                        isEarned
+                          ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50"
+                          : "border-slate-800 bg-slate-900/70 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div
+                          className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                            isEarned
+                              ? "bg-emerald-500/15 text-emerald-400"
+                              : "bg-slate-800 text-slate-600"
+                          }`}
+                        >
+                          {isEarned ? (
+                            <TrophyIcon className="h-6 w-6" />
+                          ) : (
+                            <LockClosedIcon className="h-5 w-5" />
+                          )}
                         </div>
 
-                        <h3 className="mt-4 font-bold">
-                          {badge?.name}
-                        </h3>
-
-                        <p className="mt-1 text-xs leading-5 text-slate-400">
-                          {badge?.description ||
-                            "Complete the requirement to unlock this achievement."}
-                        </p>
-
-                        <div className="mt-4 flex justify-between border-t border-slate-800 pt-3 text-[10px] text-slate-500">
-
-                          <span>
-                            {badge?.category ||
-                              "General"}
-                          </span>
-
-                          <span>
-                            Req:{" "}
-                            {badge?.requirement_value ||
-                              1}
-                          </span>
-
-                        </div>
-
+                        <span
+                          className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${
+                            isEarned
+                              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                              : "border-slate-700 bg-slate-800 text-slate-500"
+                          }`}
+                        >
+                          {isEarned ? "Unlocked" : "Locked"}
+                        </span>
                       </div>
-                    );
-                  }
-                )}
 
+                      <h3 className="mt-4 font-bold">
+                        {badge?.name}
+                      </h3>
+
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        {badge?.description ||
+                          "Complete the requirement to unlock this achievement."}
+                      </p>
+
+                      <div className="mt-4 flex justify-between border-t border-slate-800 pt-3 text-[10px] text-slate-500">
+                        <span>
+                          {badge?.category || "General"}
+                        </span>
+
+                        <span>
+                          Req: {badge?.requirement_value || 1}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
             )}
-
           </section>
         )}
-
 
         {/* ====================================================
             REWARDS
@@ -1671,174 +1270,117 @@ export default function GamificationDashboard() {
 
         {activeTab === "rewards" && (
           <section>
-
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
               <div>
                 <h2 className="text-xl font-black">
                   Wellness Rewards
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Use the XP you earn from wellness
-                  activities to unlock perks.
+                  Use the XP you earn from wellness activities to
+                  unlock perks.
                 </p>
               </div>
 
               <div className="flex gap-2 overflow-x-auto">
-
-                {[
-                  "all",
-                  "available",
-                  "claimed",
-                  "locked",
-                ].map((filter) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    onClick={() =>
-                      setRewardFilter(
-                        filter
-                      )
-                    }
-                    className={`rounded-xl px-3 py-1.5 text-xs font-bold capitalize ${
-                      rewardFilter === filter
-                        ? "bg-violet-500 text-white"
-                        : "bg-slate-900 text-slate-400 hover:bg-slate-800"
-                    }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
-
+                {["all", "available", "claimed", "locked"].map(
+                  (filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => setRewardFilter(filter)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold capitalize ${
+                        rewardFilter === filter
+                          ? "bg-violet-500 text-white"
+                          : "bg-slate-900 text-slate-400 hover:bg-slate-800"
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ),
+                )}
               </div>
-
             </div>
 
-
-            {filteredRewards.length ===
-            0 ? (
+            {filteredRewards.length === 0 ? (
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-12 text-center">
-
                 <GiftIcon className="mx-auto h-10 w-10 text-slate-700" />
 
                 <p className="mt-3 text-sm text-slate-500">
                   No rewards match this filter.
                 </p>
-
               </div>
             ) : (
-
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredRewards.map((reward) => {
+                  const status = getRewardStatus(reward);
 
-                {filteredRewards.map(
-                  (reward) => {
+                  const canClaim = status === "available";
 
-                    const status =
-                      getRewardStatus(
-                        reward
-                      );
+                  const isClaiming =
+                    claimingReward === reward?.id;
 
-                    const canClaim =
-                      status ===
-                      "available";
-
-                    const isClaiming =
-                      claimingReward ===
-                      reward?.id;
-
-                    return (
-                      <div
-                        key={
-                          reward?.id ||
-                          reward?.name
-                        }
-                        className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/70 p-5"
-                      >
-
-                        <div>
-
-                          <div className="flex items-start justify-between">
-
-                            <div className="rounded-xl bg-violet-500/10 p-3 text-violet-400">
-                              <GiftIcon className="h-6 w-6" />
-                            </div>
-
-                            <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-300">
-                              {status}
-                            </span>
-
+                  return (
+                    <div
+                      key={reward?.id || reward?.name}
+                      className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/70 p-5"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between">
+                          <div className="rounded-xl bg-violet-500/10 p-3 text-violet-400">
+                            <GiftIcon className="h-6 w-6" />
                           </div>
 
-                          <h3 className="mt-4 font-bold">
-                            {reward?.name}
-                          </h3>
-
-                          <p className="mt-1 text-xs leading-5 text-slate-400">
-                            {reward?.description ||
-                              "Wellness reward"}
-                          </p>
-
+                          <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-300">
+                            {status}
+                          </span>
                         </div>
 
+                        <h3 className="mt-4 font-bold">
+                          {reward?.name}
+                        </h3>
 
-                        <div className="mt-5 border-t border-slate-800 pt-4">
+                        <p className="mt-1 text-xs leading-5 text-slate-400">
+                          {reward?.description || "Wellness reward"}
+                        </p>
+                      </div>
 
-                          <div className="flex justify-between text-xs font-bold text-violet-300">
+                      <div className="mt-5 border-t border-slate-800 pt-4">
+                        <div className="flex justify-between text-xs font-bold text-violet-300">
+                          <span>
+                            Cost: {formatNumber(reward?.xp_cost)} XP
+                          </span>
+                        </div>
 
-                            <span>
-                              Cost:{" "}
-                              {formatNumber(
-                                reward?.xp_cost
-                              )}{" "}
-                              XP
-                            </span>
-
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={
-                              !canClaim ||
-                              isClaiming
-                            }
-                            onClick={() =>
-                              handleClaimReward(
-                                reward
-                              )
-                            }
-                            className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition ${
-                              canClaim
-                                ? "bg-violet-600 text-white hover:bg-violet-500"
-                                : "cursor-not-allowed bg-slate-800 text-slate-600"
-                            }`}
-                          >
-                            {isClaiming
-                              ? "Claiming..."
-                              : status ===
-                                  "claimed" ||
-                                status ===
-                                  "redeemed"
+                        <button
+                          type="button"
+                          disabled={!canClaim || isClaiming}
+                          onClick={() =>
+                            handleClaimReward(reward)
+                          }
+                          className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold transition ${
+                            canClaim
+                              ? "bg-violet-600 text-white hover:bg-violet-500"
+                              : "cursor-not-allowed bg-slate-800 text-slate-600"
+                          }`}
+                        >
+                          {isClaiming
+                            ? "Claiming..."
+                            : status === "claimed" ||
+                                status === "redeemed"
                               ? "Already Claimed"
                               : canClaim
                                 ? "Claim Reward"
                                 : "Locked"}
-                          </button>
-
-                        </div>
-
+                        </button>
                       </div>
-                    );
-                  }
-                )}
-
+                    </div>
+                  );
+                })}
               </div>
-
             )}
-
           </section>
         )}
-
 
         {/* ====================================================
             ANALYTICS
@@ -1846,56 +1388,37 @@ export default function GamificationDashboard() {
 
         {activeTab === "analytics" && (
           <section className="space-y-6">
-
             <div>
               <h2 className="text-xl font-black">
                 Progress Analytics
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                A visual breakdown of your actual
-                gamification progress.
+                A visual breakdown of your actual gamification
+                progress.
               </p>
             </div>
 
-
             <div className="grid gap-6 lg:grid-cols-2">
-
               {/* XP */}
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
                 <div className="mb-4">
-
                   <div className="flex items-center gap-2">
-
                     <BoltIcon className="h-5 w-5 text-amber-400" />
 
-                    <h3 className="font-bold">
-                      XP Growth
-                    </h3>
-
+                    <h3 className="font-bold">XP Growth</h3>
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
                     Recent XP activity from the backend.
                   </p>
-
                 </div>
 
                 <div className="h-72">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-
-                    <AreaChart
-                      data={xpChartData}
-                    >
-
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={xpChartData}>
                       <defs>
-
                         <linearGradient
                           id="analyticsXpGradient"
                           x1="0"
@@ -1903,7 +1426,6 @@ export default function GamificationDashboard() {
                           x2="0"
                           y2="1"
                         >
-
                           <stop
                             offset="5%"
                             stopColor="#f59e0b"
@@ -1915,9 +1437,7 @@ export default function GamificationDashboard() {
                             stopColor="#f59e0b"
                             stopOpacity={0}
                           />
-
                         </linearGradient>
-
                       </defs>
 
                       <CartesianGrid
@@ -1938,12 +1458,9 @@ export default function GamificationDashboard() {
 
                       <Tooltip
                         contentStyle={{
-                          backgroundColor:
-                            "#0f172a",
-                          border:
-                            "1px solid #334155",
-                          borderRadius:
-                            "12px",
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
                         }}
                       />
 
@@ -1954,49 +1471,31 @@ export default function GamificationDashboard() {
                         strokeWidth={2}
                         fill="url(#analyticsXpGradient)"
                       />
-
                     </AreaChart>
-
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
-
 
               {/* BADGES */}
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
                 <div className="mb-4">
-
                   <div className="flex items-center gap-2">
-
                     <TrophyIcon className="h-5 w-5 text-emerald-400" />
 
                     <h3 className="font-bold">
                       Achievement Progress
                     </h3>
-
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
                     Earned versus locked achievements.
                   </p>
-
                 </div>
 
                 <div className="h-72">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-
-                    <BarChart
-                      data={badgeChartData}
-                    >
-
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={badgeChartData}>
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="#1e293b"
@@ -2016,68 +1515,42 @@ export default function GamificationDashboard() {
 
                       <Tooltip
                         contentStyle={{
-                          backgroundColor:
-                            "#0f172a",
-                          border:
-                            "1px solid #334155",
-                          borderRadius:
-                            "12px",
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
                         }}
                       />
 
                       <Bar
                         dataKey="value"
                         fill="#34d399"
-                        radius={[
-                          8,
-                          8,
-                          0,
-                          0,
-                        ]}
+                        radius={[8, 8, 0, 0]}
                       />
-
                     </BarChart>
-
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
-
 
               {/* REWARDS */}
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
                 <div className="mb-4">
-
                   <div className="flex items-center gap-2">
-
                     <GiftIcon className="h-5 w-5 text-violet-400" />
 
                     <h3 className="font-bold">
                       Reward Progress
                     </h3>
-
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
                     Claimed, available and locked rewards.
                   </p>
-
                 </div>
 
                 <div className="h-72">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-
-                    <BarChart
-                      data={rewardChartData}
-                    >
-
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rewardChartData}>
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="#1e293b"
@@ -2097,71 +1570,43 @@ export default function GamificationDashboard() {
 
                       <Tooltip
                         contentStyle={{
-                          backgroundColor:
-                            "#0f172a",
-                          border:
-                            "1px solid #334155",
-                          borderRadius:
-                            "12px",
+                          backgroundColor: "#0f172a",
+                          border: "1px solid #334155",
+                          borderRadius: "12px",
                         }}
                       />
 
                       <Bar
                         dataKey="value"
                         fill="#a78bfa"
-                        radius={[
-                          8,
-                          8,
-                          0,
-                          0,
-                        ]}
+                        radius={[8, 8, 0, 0]}
                       />
-
                     </BarChart>
-
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
-
 
               {/* RADAR */}
 
               <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-
                 <div className="mb-4">
-
                   <div className="flex items-center gap-2">
-
                     <SparklesIcon className="h-5 w-5 text-cyan-400" />
 
                     <h3 className="font-bold">
                       Progress Balance
                     </h3>
-
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
                     XP, consistency, achievements and rewards.
                   </p>
-
                 </div>
 
                 <div className="h-72">
-
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                  >
-
-                    <RadarChart
-                      data={radarData}
-                    >
-
-                      <PolarGrid
-                        stroke="#334155"
-                      />
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={radarData}>
+                      <PolarGrid stroke="#334155" />
 
                       <PolarAngleAxis
                         dataKey="subject"
@@ -2176,20 +1621,13 @@ export default function GamificationDashboard() {
                         fill="#22d3ee"
                         fillOpacity={0.25}
                       />
-
                     </RadarChart>
-
                   </ResponsiveContainer>
-
                 </div>
-
               </div>
-
             </div>
-
           </section>
         )}
-
 
         {/* ====================================================
             TIMELINE
@@ -2197,11 +1635,8 @@ export default function GamificationDashboard() {
 
         {activeTab === "timeline" && (
           <section>
-
             <div className="mb-5 flex items-center justify-between">
-
               <div>
-
                 <h2 className="text-xl font-black">
                   XP Progress Timeline
                 </h2>
@@ -2209,114 +1644,74 @@ export default function GamificationDashboard() {
                 <p className="mt-1 text-xs text-slate-500">
                   Your latest XP earning activities.
                 </p>
-
               </div>
 
               <span className="text-xs text-slate-500">
                 {xpHistory.length} loaded
               </span>
-
             </div>
 
-
-            {xpHistory.length ===
-            0 ? (
-
+            {xpHistory.length === 0 ? (
               <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-12 text-center">
-
                 <SparklesIcon className="mx-auto h-10 w-10 text-slate-700" />
 
                 <p className="mt-3 text-sm text-slate-500">
                   No XP history available yet.
                 </p>
-
               </div>
-
             ) : (
-
               <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
-
                 <div className="space-y-3">
+                  {recentHistory.map((item, index) => {
+                    const amount = Number(item?.amount || 0);
 
-                  {recentHistory.map(
-                    (item, index) => {
-
-                      const amount =
-                        Number(
-                          item?.amount ||
-                            0
-                        );
-
-                      return (
-                        <div
-                          key={
-                            item?.id ||
-                            `${item?.created_at}-${index}`
-                          }
-                          className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4"
-                        >
-
-                          <div className="flex items-center gap-3">
-
-                            <div className="rounded-xl bg-amber-500/10 p-2.5 text-amber-400">
-                              <BoltIcon className="h-4 w-4" />
-                            </div>
-
-                            <div>
-
-                              <p className="text-sm font-semibold text-slate-200">
-                                {item?.description ||
-                                  "XP Activity"}
-                              </p>
-
-                              <p className="mt-1 text-xs text-slate-500">
-                                {formatDate(
-                                  item?.created_at
-                                )}
-                              </p>
-
-                            </div>
-
+                    return (
+                      <div
+                        key={
+                          item?.id ||
+                          `${item?.created_at}-${index}`
+                        }
+                        className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-xl bg-amber-500/10 p-2.5 text-amber-400">
+                            <BoltIcon className="h-4 w-4" />
                           </div>
 
-                          <span
-                            className={`text-sm font-black ${
-                              amount >= 0
-                                ? "text-emerald-400"
-                                : "text-rose-400"
-                            }`}
-                          >
-                            {amount >= 0
-                              ? "+"
-                              : ""}
-                            {formatNumber(
-                              amount
-                            )}{" "}
-                            XP
-                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-200">
+                              {item?.description || "XP Activity"}
+                            </p>
 
+                            <p className="mt-1 text-xs text-slate-500">
+                              {formatDate(item?.created_at)}
+                            </p>
+                          </div>
                         </div>
-                      );
-                    }
-                  )}
 
+                        <span
+                          className={`text-sm font-black ${
+                            amount >= 0
+                              ? "text-emerald-400"
+                              : "text-rose-400"
+                          }`}
+                        >
+                          {amount >= 0 ? "+" : ""}
+                          {formatNumber(amount)} XP
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-
 
                 {hasMoreHistory && (
                   <div className="mt-5 border-t border-slate-800 pt-4 text-center">
-
                     <button
                       type="button"
-                      onClick={
-                        handleLoadMoreHistory
-                      }
-                      disabled={
-                        loadingMoreHistory
-                      }
+                      onClick={handleLoadMoreHistory}
+                      disabled={loadingMoreHistory}
                       className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:opacity-50"
                     >
-
                       <ArrowPathIcon
                         className={`h-4 w-4 ${
                           loadingMoreHistory
@@ -2328,21 +1723,14 @@ export default function GamificationDashboard() {
                       {loadingMoreHistory
                         ? "Loading..."
                         : "Load More History"}
-
                     </button>
-
                   </div>
                 )}
-
               </div>
-
             )}
-
           </section>
         )}
-
       </div>
-
     </div>
   );
 }
