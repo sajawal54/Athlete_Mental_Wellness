@@ -59,3 +59,5 @@ class ProfileSerializer(serializers.ModelSerializer):
         # Update remaining profile fields
         return super().update(instance, validated_data)
       
+      
+

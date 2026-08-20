@@ -1,216 +1,221 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
-from rest_framework.permissions import IsAuthenticated
-
-from rest_framework.response import Response
+from django.db.models import OuterRef, Subquery
+from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from apps.gamification.service import award_xp
+
+from apps.notifications.services import (
+    create_wellness_notification,
+)
+
+from apps.wellness.models import (
+    ReactionPrompt,
+    ReactionGameSession,
+)
+
+from apps.wellness.services import (
+    complete_module,
+    get_module_by_slug,
+)
 
 from .serializers import (
     ReactionPromptSerializer,
     ReactionGameSessionSerializer,
-    ReactionAnswerSerializer,
 )
 
-from .services import (
-    start_game,
-    submit_answer,
-    get_leaderboard,
-    get_history,
-    complete_game,
-)
+
+# =============================================================
+# WELLNESS NOTIFICATION HELPER
+# =============================================================
+
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
+
+
+# =============================================================
+# REACTION ZONE
+# =============================================================
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def reaction_zone_info(request):
+def reaction_zone_prompts_view(request):
+    prompts = (
+        ReactionPrompt.objects
+        .filter(is_active=True)
+        .order_by("id")
+    )
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Reaction Zone",
-            "description": (
-                "Test your reaction speed "
-                "and build focus."
-            ),
-        }
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def start_reaction_game(request):
-
-    try:
-
-        session, prompt = start_game(
-            request.user
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error)
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    serializer = ReactionPromptSerializer(
+        prompts,
+        many=True,
+    )
 
     return Response(
         {
             "success": True,
-            "session": ReactionGameSessionSerializer(
-                session
-            ).data,
-            "prompt": ReactionPromptSerializer(
-                prompt
-            ).data,
+            "prompts": serializer.data,
         },
-        status=status.HTTP_201_CREATED
+        status=status.HTTP_200_OK,
     )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def submit_reaction_answer(
-    request,
-    session_id
-):
+def reaction_zone_submit_score_view(request):
+    try:
+        score = int(
+            request.data.get(
+                "score",
+                0,
+            )
+        )
 
-    serializer = ReactionAnswerSerializer(
-        data=request.data
-    )
+        correct = int(
+            request.data.get(
+                "correct_answers",
+                0,
+            )
+        )
 
-    if not serializer.is_valid():
+        total = int(
+            request.data.get(
+                "total_prompts",
+                5,
+            )
+        )
 
+        duration = int(
+            request.data.get(
+                "duration_seconds",
+                10,
+            )
+        )
+
+    except (TypeError, ValueError):
         return Response(
             {
                 "success": False,
-                "errors": serializer.errors
+                "message": "Score values must be valid numbers.",
             },
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
+    # Prevent invalid negative values
+    score = max(score, 0)
+    correct = max(correct, 0)
+    total = max(total, 1)
+    duration = max(duration, 0)
 
-        result = submit_answer(
+    # Correct answers cannot exceed total prompts
+    correct = min(correct, total)
+
+    session = ReactionGameSession.objects.create(
+        user=request.user,
+        score=score,
+        correct_answers=correct,
+        total_prompts=total,
+        duration_seconds=duration,
+        status="completed",
+        completed_at=timezone.now(),
+    )
+
+    module = get_module_by_slug(
+        "reaction-zone"
+    )
+
+    xp_awarded = 0
+
+    if module:
+        result = complete_module(
             user=request.user,
-            session_id=session_id,
-            prompt_id=serializer.validated_data[
-                "prompt_id"
-            ],
-            answer=serializer.validated_data[
-                "answer"
-            ],
-            reaction_time=serializer.validated_data[
-                "reaction_time"
-            ],
+            module=module,
+            score=score,
         )
 
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error)
-            },
-            status=status.HTTP_400_BAD_REQUEST
+        xp_awarded = result.get(
+            "xp_awarded",
+            0,
         )
 
-    return Response({
-        "success": True,
-        "correct": result["correct"],
-        "score": result["score"],
-        "session": ReactionGameSessionSerializer(
-            result["session"]
-        ).data,
-        "next_prompt": ReactionPromptSerializer(
-            result["next_prompt"]
-        ).data if result["next_prompt"] else None,
-    })
+        if xp_awarded > 0:
+            notify_wellness_completion(
+                user=request.user,
+                title="Reaction Zone Score Saved!",
+                message=(
+                    f"You earned {xp_awarded} XP "
+                    "for playing Reaction Zone!"
+                ),
+                action_url="/modules",
+            )
 
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def complete_reaction_game(
-    request,
-    session_id
-):
-
-    try:
-
-        result = complete_game(
-            request.user,
-            session_id
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error)
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    return Response({
-        "success": True,
-        "message": "Reaction Zone completed.",
-        "already_completed": result[
-            "already_completed"
-        ],
-        "xp_awarded": result[
-            "xp_awarded"
-        ],
-        "session": ReactionGameSessionSerializer(
-            result["session"]
-        ).data,
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def reaction_leaderboard(request):
-
-    sessions = get_leaderboard()
-
-    data = []
-
-    for index, session in enumerate(
-        sessions,
-        start=1
-    ):
-
-        data.append({
-            "rank": index,
-            "username": session.user.username,
-            "score": session.score,
-            "correct_answers": session.correct_answers,
-        })
-
-    return Response({
-        "success": True,
-        "leaderboard": data,
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def reaction_history(request):
-
-    sessions = get_history(
-        request.user
+    return Response(
+        {
+            "success": True,
+            "message": "Reaction score submitted!",
+            "score": score,
+            "correct_answers": correct,
+            "total_prompts": total,
+            "duration_seconds": duration,
+            "session_id": session.id,
+            "xp_awarded": xp_awarded,
+        },
+        status=status.HTTP_200_OK,
     )
 
-    return Response({
-        "success": True,
-        "history": ReactionGameSessionSerializer(
-            sessions,
-            many=True
-        ).data,
-    })
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reaction_zone_leaderboard_view(request):
+    # Best score for each user
+    best_session_ids = (
+        ReactionGameSession.objects
+        .filter(
+            user=OuterRef("user")
+        )
+        .order_by(
+            "-score",
+            "duration_seconds",
+            "created_at",
+        )
+        .values("id")[:1]
+    )
+
+    top_scores = (
+        ReactionGameSession.objects
+        .filter(
+            id=Subquery(best_session_ids)
+        )
+        .select_related("user")
+        .order_by(
+            "-score",
+            "duration_seconds",
+        )[:10]
+    )
+
+    serializer = ReactionGameSessionSerializer(
+        top_scores,
+        many=True,
+    )
+
+    return Response(
+        {
+            "success": True,
+            "leaderboard": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )

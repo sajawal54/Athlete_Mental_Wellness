@@ -30,6 +30,10 @@ urlpatterns = [
     path("api/dashboard/", include("apps.dashboard.urls")),
     path("api/gamification/" , include("apps.gamification.urls")),
     path("api/wellness/", include("apps.wellness.urls")),
+    path("api/emergency/",include("apps.emergency_support.urls")),
+      path(
+        "api/notifications/",
+        include("apps.notifications.urls"),),
     
 ]
 

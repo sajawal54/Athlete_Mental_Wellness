@@ -322,6 +322,7 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
         setUserXp(120); // Default balance for testing
       }
     } catch (err) {
+      console.error('Error fetching codex categories:', err);
       setCategories(EXTENDED_CATEGORIES);
       if (EXTENDED_CATEGORIES[0]?.lessons?.[0]) {
         setSelectedLesson(EXTENDED_CATEGORIES[0].lessons[0]);
@@ -332,7 +333,13 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
   }, []);
 
   useEffect(() => {
-    fetchCategories();
+    let isMounted = true;
+    Promise.resolve().then(() => {
+      if (isMounted) fetchCategories();
+    });
+    return () => {
+      isMounted = false;
+    };
   }, [fetchCategories]);
 
   const handleSelectLesson = (lesson) => {

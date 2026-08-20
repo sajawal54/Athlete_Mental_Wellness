@@ -1,289 +1,184 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
-from rest_framework.permissions import IsAuthenticated
-
-from rest_framework.response import Response
+from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from .serializers import (
+from apps.wellness.models import BreathworkSession
+
+from apps.wellness.modules.breathwork.serializers import (
     BreathworkSessionSerializer,
 )
 
-from .services import (
-    start_session,
-    update_session,
-    pause_session,
-    resume_session,
-    stop_session,
-    complete_session,
+from apps.wellness.services import (
+    complete_module,
+    get_module_by_slug,
 )
+
+from apps.notifications.services import (
+    create_wellness_notification,
+)
+
+
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    """
+    Creates a Wellness notification for the user.
+    """
+
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def breathwork_info(request):
+def breathwork_info_view(request):
+    """
+    Returns Breathwork duration options
+    and the breathing technique used
+    by the module.
+    """
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Breathwork",
-            "description": (
-                "A guided breathing session "
-                "with selectable durations."
+    return Response(
+        {
+            "success": True,
+            "duration_options": [
+                {
+                    "minutes": 1,
+                    "label": "1 Minute Reset",
+                },
+                {
+                    "minutes": 3,
+                    "label": "3 Minutes Focus",
+                },
+                {
+                    "minutes": 5,
+                    "label": "5 Minutes Decompress",
+                },
+                {
+                    "minutes": 10,
+                    "label": "10 Minutes Deep State",
+                },
+            ],
+            "technique": (
+                "Box Breathing "
+                "(4s Inhale, 4s Hold, 4s Exhale, 4s Hold)"
             ),
         },
-        "duration_options": [
-            {
-                "minutes": 1,
-                "label": "1 Minute",
-            },
-            {
-                "minutes": 3,
-                "label": "3 Minutes",
-            },
-            {
-                "minutes": 5,
-                "label": "5 Minutes",
-            },
-            {
-                "minutes": 10,
-                "label": "10 Minutes",
-            },
-        ],
-    })
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def breathwork_start(request):
-
-    duration = request.data.get(
-        "duration_minutes",
-        5,
-    )
+def breathwork_record_view(request):
+    """
+    Records a completed Breathwork session,
+    completes the Breathwork module and awards XP.
+    """
 
     try:
-
-        session = start_session(
-            request.user,
-            duration,
+        duration = int(
+            request.data.get(
+                "duration_minutes",
+                3,
+            )
         )
 
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+        elapsed = int(
+            request.data.get(
+                "elapsed_seconds",
+                duration * 60,
+            )
         )
 
-    serializer = BreathworkSessionSerializer(
-        session
-    )
-
-    return Response({
-        "success": True,
-        "message": "Breathwork session started.",
-        "session": serializer.data,
-    })
-
-
-@api_view(["PATCH"])
-@permission_classes([IsAuthenticated])
-def breathwork_update(
-    request,
-    session_id,
-):
-
-    elapsed = request.data.get(
-        "elapsed_seconds"
-    )
-
-    if elapsed is None:
-
+    except (TypeError, ValueError):
         return Response(
             {
                 "success": False,
                 "message": (
-                    "elapsed_seconds is required."
+                    "duration_minutes and elapsed_seconds "
+                    "must be valid numbers."
                 ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
-
-        session = update_session(
-            request.user,
-            session_id,
-            elapsed,
-        )
-
-    except ValueError as error:
-
+    if duration <= 0:
         return Response(
             {
                 "success": False,
-                "message": str(error),
+                "message": (
+                    "duration_minutes must be greater than 0."
+                ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    serializer = BreathworkSessionSerializer(
-        session
+    if elapsed < 0:
+        return Response(
+            {
+                "success": False,
+                "message": (
+                    "elapsed_seconds cannot be negative."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    session = BreathworkSession.objects.create(
+        user=request.user,
+        duration_minutes=duration,
+        elapsed_seconds=elapsed,
+        status="completed",
+        completed_at=timezone.now(),
     )
 
-    return Response({
-        "success": True,
-        "session": serializer.data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def breathwork_pause(
-    request,
-    session_id,
-):
-
-    try:
-
-        session = pause_session(
-            request.user,
-            session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Session paused.",
-        "session": BreathworkSessionSerializer(
-            session
-        ).data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def breathwork_resume(
-    request,
-    session_id,
-):
-
-    try:
-
-        session = resume_session(
-            request.user,
-            session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Session resumed.",
-        "session": BreathworkSessionSerializer(
-            session
-        ).data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def breathwork_stop(
-    request,
-    session_id,
-):
-
-    try:
-
-        session = stop_session(
-            request.user,
-            session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Session stopped.",
-        "session": BreathworkSessionSerializer(
-            session
-        ).data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def breathwork_complete(
-    request,
-    session_id,
-):
-
-    try:
-
-        result = complete_session(
-            request.user,
-            session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    serializer = BreathworkSessionSerializer(
-        result["session"]
+    module = get_module_by_slug(
+        "breathwork-sanctuary"
     )
 
-    return Response({
-        "success": True,
-        "message": (
-            "Breathwork completed."
-            if not result["already_completed"]
-            else "Session already completed."
-        ),
-        "already_completed": result[
-            "already_completed"
-        ],
-        "xp_awarded": result[
-            "xp_awarded"
-        ],
-        "session": serializer.data,
-    })
+    xp_awarded = 0
+
+    if module:
+        result = complete_module(
+            user=request.user,
+            module=module,
+            session=None,
+            score=100,
+        )
+
+        xp_awarded = result.get(
+            "xp_awarded",
+            0,
+        )
+
+        if xp_awarded > 0:
+            notify_wellness_completion(
+                user=request.user,
+                title="Breathwork Session Finished!",
+                message=(
+                    f"You earned {xp_awarded} XP!"
+                ),
+                action_url="/modules",
+            )
+
+    return Response(
+        {
+            "success": True,
+            "session": BreathworkSessionSerializer(
+                session
+            ).data,
+            "xp_awarded": xp_awarded,
+        },
+        status=status.HTTP_201_CREATED,
+    )

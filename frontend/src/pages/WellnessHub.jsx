@@ -103,8 +103,12 @@ export const WellnessHub = () => {
   }, []);
 
   useEffect(() => {
+  const timer = setTimeout(() => {
     fetchHubData();
-  }, [fetchHubData]);
+  }, 0);
+
+  return () => clearTimeout(timer);
+}, [fetchHubData]);
 
   const filteredModules = modules.filter((mod) => {
     const titleMatch = (mod.title || mod.name || '').toLowerCase().includes(searchQuery.toLowerCase());

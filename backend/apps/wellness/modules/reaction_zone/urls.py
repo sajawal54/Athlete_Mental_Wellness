@@ -1,50 +1,28 @@
 from django.urls import path
 
 from .views import (
-    reaction_zone_info,
-    start_reaction_game,
-    submit_reaction_answer,
-    complete_reaction_game,
-    reaction_leaderboard,
-    reaction_history,
+    reaction_zone_prompts_view,
+    reaction_zone_submit_score_view,
+    reaction_zone_leaderboard_view,
 )
 
 
 urlpatterns = [
-
     path(
-        "",
-        reaction_zone_info,
-        name="reaction-zone-info"
+        "prompts/",
+        reaction_zone_prompts_view,
+        name="reaction-zone-prompts",
     ),
 
     path(
-        "start/",
-        start_reaction_game,
-        name="reaction-start"
-    ),
-
-    path(
-        "session/<int:session_id>/answer/",
-        submit_reaction_answer,
-        name="reaction-answer"
-    ),
-
-    path(
-        "session/<int:session_id>/complete/",
-        complete_reaction_game,
-        name="reaction-complete"
+        "submit-score/",
+        reaction_zone_submit_score_view,
+        name="reaction-zone-submit",
     ),
 
     path(
         "leaderboard/",
-        reaction_leaderboard,
-        name="reaction-leaderboard"
-    ),
-
-    path(
-        "history/",
-        reaction_history,
-        name="reaction-history"
+        reaction_zone_leaderboard_view,
+        name="reaction-zone-leaderboard",
     ),
 ]

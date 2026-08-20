@@ -1,91 +1,141 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
-from rest_framework.permissions import IsAuthenticated
-
-from rest_framework.response import Response
+from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from .serializers import (
+from apps.wellness.models import ReframeSession
+
+from apps.wellness.modules.setback_reframer.serializers import (
     ReframeSessionSerializer,
-    ReframeCreateSerializer,
 )
 
-from .services import (
-    create_reframe_session,
-    get_history,
-    complete_reframe,
+from apps.wellness.services import (
+    complete_module,
+    generate_setback_reframe,
+    get_module_by_slug,
+)
+
+from apps.notifications.services import (
+    create_wellness_notification,
 )
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def reframer_info(request):
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    """
+    Creates a Wellness notification for the user.
+    """
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Setback Reframer",
-            "description": (
-                "Turn a difficult thought into "
-                "a more balanced perspective."
-            ),
-        },
-        "instructions": [
-            "Write one difficult or negative thought.",
-            "Review the suggested reframe.",
-            "Choose one small action you can control.",
-        ],
-    })
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def create_reframe(request):
+def setback_reframe_generate_view(request):
+    """
+    Generates an AI-based reframe for a user's
+    negative thought or setback.
 
-    serializer = ReframeCreateSerializer(
-        data=request.data
+    The generated result is saved as a ReframeSession.
+    """
+
+    thought = request.data.get(
+        "negative_thought",
+        "",
+    ).strip()
+
+    category = request.data.get(
+        "category",
+        "performance",
     )
 
-    if not serializer.is_valid():
-
+    if not thought:
         return Response(
             {
                 "success": False,
-                "errors": serializer.errors,
+                "message": (
+                    "Please describe the setback or thought."
+                ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
-
-        session = create_reframe_session(
-            user=request.user,
-            thought=serializer.validated_data[
-                "negative_thought"
-            ],
+        result = generate_setback_reframe(
+            thought,
+            category,
         )
 
-    except ValueError as error:
-
+    except Exception as exc:
         return Response(
             {
                 "success": False,
-                "message": str(error),
+                "message": (
+                    "Unable to generate a reframe right now."
+                ),
+                "error": str(exc),
             },
-            status=status.HTTP_400_BAD_REQUEST,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+    session = ReframeSession.objects.create(
+        user=request.user,
+        negative_thought=thought,
+        reframe=result["reframe"],
+        safety_message=result["safety_message"],
+        status="completed",
+        completed_at=timezone.now(),
+    )
+
+    module = get_module_by_slug(
+        "setback-reframer"
+    )
+
+    xp_awarded = 0
+
+    if module:
+        completion_result = complete_module(
+            user=request.user,
+            module=module,
+            session=None,
+            score=100,
+        )
+
+        xp_awarded = completion_result.get(
+            "xp_awarded",
+            0,
+        )
+
+        if xp_awarded > 0:
+            notify_wellness_completion(
+                user=request.user,
+                title="Setback Reframed!",
+                message=(
+                    f"You earned {xp_awarded} XP "
+                    "for completing Setback Reframer!"
+                ),
+                action_url="/modules",
+            )
 
     return Response(
         {
             "success": True,
-            "message": "Reframe generated.",
-            "session": ReframeSessionSerializer(
-                session
-            ).data,
+            "reframe": result["reframe"],
+            "action_step": result["action_step"],
+            "safety_message": result["safety_message"],
+            "session_id": session.id,
+            "xp_awarded": xp_awarded,
         },
         status=status.HTTP_201_CREATED,
     )
@@ -93,10 +143,15 @@ def create_reframe(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def reframer_history(request):
+def setback_reframe_history_view(request):
+    """
+    Returns the user's latest 10 Setback Reframer sessions.
+    """
 
-    sessions = get_history(
-        request.user
+    sessions = (
+        ReframeSession.objects
+        .filter(user=request.user)
+        .order_by("-created_at")[:10]
     )
 
     serializer = ReframeSessionSerializer(
@@ -104,50 +159,10 @@ def reframer_history(request):
         many=True,
     )
 
-    return Response({
-        "success": True,
-        "history": serializer.data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def complete_reframe_view(
-    request,
-    session_id,
-):
-
-    try:
-
-        result = complete_reframe(
-            user=request.user,
-            session_id=session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": (
-            "Reframing exercise completed."
-            if not result["already_completed"]
-            else "Exercise already completed."
-        ),
-        "already_completed": result[
-            "already_completed"
-        ],
-        "xp_awarded": result[
-            "xp_awarded"
-        ],
-        "session": ReframeSessionSerializer(
-            result["session"]
-        ).data,
-    })
+    return Response(
+        {
+            "success": True,
+            "history": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )

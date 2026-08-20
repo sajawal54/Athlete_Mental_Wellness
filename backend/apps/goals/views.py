@@ -1,5 +1,7 @@
+
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Q
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,6 +11,7 @@ from .models import DailyGoal
 from .serializers import DailyGoalSerializer
 from apps.accounts.models import Profile
 from apps.gamification.service import award_xp
+from apps.notifications.services import create_goal_notification
 
 
 GOAL_XP_REWARD = 100
@@ -17,22 +20,12 @@ GOAL_XP_REWARD = 100
 class DailyGoalListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        today = timezone.localdate()
-        goals = DailyGoal.objects.filter(
-            user=request.user,
-            created_at=today
-        ).order_by("-id")
-
-        serializer = DailyGoalSerializer(
-            goals,
-            many=True
-        )
-
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK
-        )
+    def get(self, request): 
+       today = timezone.localdate() 
+       yesterday = today - timezone.timedelta(days=1) 
+       goals = DailyGoal.objects.filter( user=request.user ).filter( Q(is_completed=False) | Q(created_at__in=[today, yesterday]) ).order_by("-id") 
+       serializer = DailyGoalSerializer( goals, many=True ) 
+       return Response( serializer.data, status=status.HTTP_200_OK )
 
     def post(self, request):
         serializer = DailyGoalSerializer(
@@ -43,6 +36,12 @@ class DailyGoalListCreateView(APIView):
 
         goal = serializer.save(
             user=request.user
+        )
+
+        # Notification: daily goal reminder
+        create_goal_notification(
+            user=request.user,
+            message=f"You have a new daily goal waiting: {goal.title}",
         )
 
         return Response(
@@ -79,14 +78,32 @@ class DailyGoalToggleView(APIView):
 
             xp_gained = 0
 
-            # incomplete -> Conplete
+            # incomplete -> Complete
             if not was_completed and goal.is_completed:
-                xp_result = award_xp(user=request.user , amount=GOAL_XP_REWARD , source="daily_goal" , description=f"Completed Daily Goal : {goal.title}")
+                xp_result = award_xp(
+                    user=request.user,
+                    amount=GOAL_XP_REWARD,
+                    source="daily_goal",
+                    description=f"Completed Daily Goal : {goal.title}"
+                )
+
                 xp_gained = GOAL_XP_REWARD
+
+                # Notification: goal completed
+                create_goal_notification(
+                    user=request.user,
+                    message=f"Great job! You completed your daily goal: {goal.title}",
+                )
 
             # complete -> incomplete
             elif was_completed and not goal.is_completed:
-                xp_result = award_xp(user=request.user , amount=-GOAL_XP_REWARD , source="daily_goal_reversal" , description=f"Reversed XP for incomplete goal   : {goal.title}")
+                xp_result = award_xp(
+                    user=request.user,
+                    amount=-GOAL_XP_REWARD,
+                    source="daily_goal_reversal",
+                    description=f"Reversed XP for incomplete goal   : {goal.title}"
+                )
+
                 xp_gained = -GOAL_XP_REWARD
 
             profile.refresh_from_db()
@@ -101,8 +118,6 @@ class DailyGoalToggleView(APIView):
             data,
             status=status.HTTP_200_OK
         )
-
-
 
 
 class DailyGoalDeleteView(APIView):
@@ -126,3 +141,4 @@ class DailyGoalDeleteView(APIView):
             {"message": "Goal deleted successfully"},
             status=status.HTTP_204_NO_CONTENT
         )
+

@@ -1,20 +1,16 @@
 from rest_framework import serializers
 
-from .models import (
+from apps.wellness.models import (
     TransitionResource,
     ResourceView,
 )
 
 
-class TransitionResourceSerializer(
-    serializers.ModelSerializer
-):
-
-    viewed = serializers.SerializerMethodField()
+class TransitionResourceSerializer(serializers.ModelSerializer):
+    is_viewed = serializers.SerializerMethodField()
 
     class Meta:
         model = TransitionResource
-
         fields = [
             "id",
             "title",
@@ -23,14 +19,11 @@ class TransitionResourceSerializer(
             "resource_type",
             "category",
             "file",
-            "is_active",
             "order",
-            "viewed",
-            "created_at",
+            "is_viewed",
         ]
 
-    def get_viewed(self, obj):
-
+    def get_is_viewed(self, obj):
         request = self.context.get("request")
 
         if not request or not request.user.is_authenticated:
@@ -40,28 +33,3 @@ class TransitionResourceSerializer(
             user=request.user,
             resource=obj,
         ).exists()
-
-
-class ResourceViewSerializer(
-    serializers.ModelSerializer
-):
-
-    resource_title = serializers.CharField(
-        source="resource.title",
-        read_only=True,
-    )
-
-    class Meta:
-        model = ResourceView
-
-        fields = [
-            "id",
-            "resource",
-            "resource_title",
-            "viewed_at",
-        ]
-
-        read_only_fields = [
-            "id",
-            "viewed_at",
-        ]

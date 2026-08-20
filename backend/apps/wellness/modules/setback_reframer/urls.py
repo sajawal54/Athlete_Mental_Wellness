@@ -1,36 +1,21 @@
 from django.urls import path
 
 from .views import (
-    reframer_info,
-    create_reframe,
-    reframer_history,
-    complete_reframe_view,
+    setback_reframe_generate_view,
+    setback_reframe_history_view,
 )
 
 
 urlpatterns = [
-
     path(
-        "",
-        reframer_info,
-        name="reframer-info",
-    ),
-
-    path(
-        "create/",
-        create_reframe,
-        name="create-reframe",
+        "generate/",
+        setback_reframe_generate_view,
+        name="setback-reframer-generate",
     ),
 
     path(
         "history/",
-        reframer_history,
-        name="reframer-history",
-    ),
-
-    path(
-        "session/<int:session_id>/complete/",
-        complete_reframe_view,
-        name="complete-reframe",
+        setback_reframe_history_view,
+        name="setback-reframer-history",
     ),
 ]

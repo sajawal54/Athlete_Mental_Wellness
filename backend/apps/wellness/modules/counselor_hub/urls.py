@@ -1,50 +1,26 @@
 from django.urls import path
 
 from .views import (
-    counselor_hub_info,
-    counselor_list,
-    counselor_detail,
-    create_counselor_request,
-    counselor_request_history,
-    cancel_counselor_request,
+    counselor_list_view,
+    counselor_request_create_view,
+    counselor_my_requests_view,
 )
 
 
 urlpatterns = [
-
-    path(
-        "",
-        counselor_hub_info,
-        name="counselor-hub-info",
-    ),
-
     path(
         "counselors/",
-        counselor_list,
-        name="counselor-list",
+        counselor_list_view,
+        name="counselor-hub-list",
     ),
-
     path(
-        "counselors/<int:counselor_id>/",
-        counselor_detail,
-        name="counselor-detail",
+        "request/",
+        counselor_request_create_view,
+        name="counselor-hub-request",
     ),
-
     path(
-        "requests/",
-        create_counselor_request,
-        name="counselor-request-create",
-    ),
-
-    path(
-        "requests/history/",
-        counselor_request_history,
-        name="counselor-request-history",
-    ),
-
-    path(
-        "requests/<int:request_id>/cancel/",
-        cancel_counselor_request,
-        name="counselor-request-cancel",
+        "my-requests/",
+        counselor_my_requests_view,
+        name="counselor-hub-my-requests",
     ),
 ]

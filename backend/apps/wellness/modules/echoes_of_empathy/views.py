@@ -1,70 +1,93 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
-from rest_framework.permissions import IsAuthenticated
-
-from rest_framework.response import Response
+from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from .serializers import (
+from apps.wellness.models import (
+    EmpathyScenario,
+    EmpathySession,
+)
+
+from apps.wellness.modules.echoes_of_empathy.serializers import (
     EmpathyScenarioSerializer,
-    EmpathySessionSerializer,
-    EmpathyResponseSerializer,
 )
 
-from .services import (
-    get_scenarios,
-    create_session,
-    submit_response,
-    get_history,
-    complete_session,
+from apps.wellness.services import (
+    complete_module,
+    evaluate_empathy_response,
+    get_module_by_slug,
 )
+
+from apps.notifications.services import (
+    create_wellness_notification,
+)
+
+
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    """
+    Creates a Wellness notification for the user.
+    """
+
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def empathy_info(request):
+def echoes_of_empathy_scenarios_view(request):
+    """
+    Returns all active Echoes of Empathy scenarios.
+    """
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Echoes of Empathy",
-            "description": (
-                "Practice responding to difficult "
-                "situations with empathy."
-            ),
+    scenarios = (
+        EmpathyScenario.objects
+        .filter(is_active=True)
+        .order_by("order")
+    )
+
+    serializer = EmpathyScenarioSerializer(
+        scenarios,
+        many=True,
+    )
+
+    return Response(
+        {
+            "success": True,
+            "scenarios": serializer.data,
         },
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def empathy_scenarios(request):
-
-    scenarios = get_scenarios()
-
-    return Response({
-        "success": True,
-        "scenarios": EmpathyScenarioSerializer(
-            scenarios,
-            many=True,
-        ).data,
-    })
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def start_empathy_session(request):
+def echoes_of_empathy_submit_view(request):
+    """
+    Evaluates the user's response to an empathy scenario,
+    saves the session and completes the module.
+    """
 
     scenario_id = request.data.get(
         "scenario_id"
     )
 
-    if not scenario_id:
+    response_text = request.data.get(
+        "response",
+        "",
+    ).strip()
 
+    if not scenario_id:
         return Response(
             {
                 "success": False,
@@ -74,147 +97,82 @@ def start_empathy_session(request):
         )
 
     try:
-
-        session = create_session(
-            user=request.user,
-            scenario_id=scenario_id,
+        scenario = EmpathyScenario.objects.get(
+            id=scenario_id,
+            is_active=True,
         )
-
-    except ValueError as error:
-
+    except EmpathyScenario.DoesNotExist:
         return Response(
             {
                 "success": False,
-                "message": str(error),
+                "message": "Scenario not found.",
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if not response_text:
+        return Response(
+            {
+                "success": False,
+                "message": (
+                    "Please provide your response."
+                ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    eval_result = evaluate_empathy_response(
+        scenario,
+        response_text,
+    )
+
+    session = EmpathySession.objects.create(
+        user=request.user,
+        scenario=scenario,
+        response=response_text,
+        feedback=eval_result["feedback"],
+        score=eval_result["score"],
+        status="completed",
+        completed_at=timezone.now(),
+    )
+
+    module = get_module_by_slug(
+        "echoes-of-empathy"
+    )
+
+    xp_awarded = 0
+
+    if module:
+        result = complete_module(
+            user=request.user,
+            module=module,
+            session=None,
+            score=eval_result["score"],
+        )
+
+        xp_awarded = result.get(
+            "xp_awarded",
+            0,
+        )
+
+        if xp_awarded > 0:
+            notify_wellness_completion(
+                user=request.user,
+                title="Empathy Response Submitted!",
+                message=(
+                    f"You earned {xp_awarded} XP!"
+                ),
+                action_url="/modules",
+            )
 
     return Response(
         {
             "success": True,
-            "session": EmpathySessionSerializer(
-                session
-            ).data,
+            "score": eval_result["score"],
+            "feedback": eval_result["feedback"],
+            "metrics": eval_result["metrics"],
+            "session_id": session.id,
+            "xp_awarded": xp_awarded,
         },
         status=status.HTTP_201_CREATED,
     )
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def submit_empathy_response(
-    request,
-    session_id,
-):
-
-    serializer = EmpathyResponseSerializer(
-        data={
-            "scenario_id": request.data.get(
-                "scenario_id",
-                0,
-            ),
-            "response": request.data.get(
-                "response",
-                "",
-            ),
-        }
-    )
-
-    if not serializer.is_valid():
-
-        return Response(
-            {
-                "success": False,
-                "errors": serializer.errors,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-
-        session = submit_response(
-            user=request.user,
-            session_id=session_id,
-            response=serializer.validated_data[
-                "response"
-            ],
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Response evaluated.",
-        "session": EmpathySessionSerializer(
-            session
-        ).data,
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def empathy_history(request):
-
-    sessions = get_history(
-        request.user
-    )
-
-    return Response({
-        "success": True,
-        "history": EmpathySessionSerializer(
-            sessions,
-            many=True,
-        ).data,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def complete_empathy_session(
-    request,
-    session_id,
-):
-
-    try:
-
-        result = complete_session(
-            user=request.user,
-            session_id=session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": (
-            "Echoes of Empathy completed."
-            if not result["already_completed"]
-            else "Session already completed."
-        ),
-        "already_completed": result[
-            "already_completed"
-        ],
-        "xp_awarded": result[
-            "xp_awarded"
-        ],
-        "session": EmpathySessionSerializer(
-            result["session"]
-        ).data,
-    })

@@ -18,40 +18,70 @@ export const TransitionSupportActivity = ({ onProgress, onComplete, isSubmitting
 
   const fetchResources = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
       const cat = selectedCategory === 'all' ? null : selectedCategory;
       const res = await wellnessService.getTransitionResources(cat);
+
       if (res?.success) {
         setResources(res.resources || []);
+
         if (res.resources?.length > 0) {
           setSelectedResource(res.resources[0]);
+        } else {
+          setSelectedResource(null);
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load transition resources.');
+      setError(
+        err.response?.data?.message ||
+          'Failed to load transition resources.'
+      );
     } finally {
       setLoading(false);
     }
   }, [selectedCategory]);
 
   useEffect(() => {
-    fetchResources();
+    let isMounted = true;
+
+    const loadResources = async () => {
+      setLoading(true);
+      setError(null);
+
+      if (!isMounted) return;
+
+      await fetchResources();
+    };
+
+    loadResources();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchResources]);
 
   const handleSelectResource = async (res) => {
     setSelectedResource(res);
+
     try {
       await wellnessService.markTransitionResourceViewed(res.id);
+
       setViewedIds((prev) => new Set(prev).add(res.id));
-      if (onProgress) onProgress(100, 3);
+
+      if (onProgress) {
+        onProgress(100, 3);
+      }
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleFinish = () => {
-    if (onComplete) onComplete(100, 'Explored life transition and career support playbooks.');
+    if (onComplete) {
+      onComplete(
+        100,
+        'Explored life transition and career support playbooks.'
+      );
+    }
   };
 
   return (
@@ -89,10 +119,12 @@ export const TransitionSupportActivity = ({ onProgress, onComplete, isSubmitting
       ) : (
         <div className="grid gap-6 md:grid-cols-[260px_1fr]">
           {/* RESOURCE LIST */}
-          <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-115 overflow-y-auto pr-1">
             {resources.map((item) => {
               const isSelected = selectedResource?.id === item.id;
-              const isViewed = viewedIds.has(item.id) || item.is_viewed;
+              const isViewed =
+                viewedIds.has(item.id) || item.is_viewed;
+
               return (
                 <button
                   key={item.id}
@@ -107,9 +139,17 @@ export const TransitionSupportActivity = ({ onProgress, onComplete, isSubmitting
                     <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
                       {item.category?.replace(/_/g, ' ')}
                     </span>
-                    {isViewed && <span className="text-[10px] font-extrabold text-emerald-600">✓ Read</span>}
+
+                    {isViewed && (
+                      <span className="text-[10px] font-extrabold text-emerald-600">
+                        ✓ Read
+                      </span>
+                    )}
                   </div>
-                  <h4 className="text-xs font-bold text-slate-800 line-clamp-2">{item.title}</h4>
+
+                  <h4 className="text-xs font-bold text-slate-800 line-clamp-2">
+                    {item.title}
+                  </h4>
                 </button>
               );
             })}
@@ -123,8 +163,14 @@ export const TransitionSupportActivity = ({ onProgress, onComplete, isSubmitting
                   <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">
                     {selectedResource.resource_type?.toUpperCase()}
                   </span>
-                  <h3 className="text-xl font-extrabold text-slate-800 mt-1">{selectedResource.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{selectedResource.description}</p>
+
+                  <h3 className="text-xl font-extrabold text-slate-800 mt-1">
+                    {selectedResource.title}
+                  </h3>
+
+                  <p className="text-xs text-slate-500 mt-1">
+                    {selectedResource.description}
+                  </p>
                 </div>
 
                 <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">

@@ -11,6 +11,7 @@ import {
   ShieldExclamationIcon,
   Cog6ToothIcon,
   XMarkIcon,
+   BellIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 
@@ -18,18 +19,19 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
   const location = useLocation();
 
   const navigationItems = [
-    { name: "Dashboard", path: "/dashboard", icon: HomeIcon },
-    { name: "Mood Tracker", path: "/mood-checkin", icon: FaceSmileIcon },
-    { name: "Daily Goals", path: "/goals", icon: CheckBadgeIcon },
-    { name: "Sound Therapy", path: "/sound-therapy", icon: MusicalNoteIcon },
-    { name: "AI Affirmations", path: "/affirmations", icon: SparklesIcon },
-    { name: "AI Bio Guide", path: "/bio-guide", icon: SparklesIcon },
-    { name: "Gamification", path: "/gamification", icon: TrophyIcon },
-    { name: "Wellness Modules", path: "/modules", icon: BookOpenIcon },
-    { name: "Trophy Room", path: "/trophy-room", icon: StarIcon },
-    { name: "Emergency Support", path: "/support", icon: ShieldExclamationIcon },
-    { name: "Settings", path: "/settings", icon: Cog6ToothIcon },
-  ];
+  { name: "Dashboard", path: "/dashboard", icon: HomeIcon },
+  { name: "Mood Tracker", path: "/mood-checkin", icon: FaceSmileIcon },
+  { name: "Daily Goals", path: "/goals", icon: CheckBadgeIcon },
+  { name: "Sound Therapy", path: "/sound-therapy", icon: MusicalNoteIcon },
+  { name: "AI Affirmations", path: "/affirmations", icon: SparklesIcon },
+  { name: "AI Bio Guide", path: "/bio-guide", icon: SparklesIcon },
+  { name: "Gamification", path: "/gamification", icon: TrophyIcon },
+  { name: "Wellness Modules", path: "/modules", icon: BookOpenIcon },
+  { name: "Trophy Room", path: "/trophy-room", icon: StarIcon },
+  { name: "Notifications", path: "/notifications", icon: BellIcon,},
+  { name: "Emergency Support", path: "/support", icon: ShieldExclamationIcon },
+  { name: "Settings", path: "/settings", icon: Cog6ToothIcon },
+];
 
   const isActive = (path) => location.pathname === path;
 

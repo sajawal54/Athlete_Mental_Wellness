@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
-export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
+export const WordGridActivity = ({ onProgress, onComplete }) => {
   const [puzzle, setPuzzle] = useState(null);
   const [selectedCells, setSelectedCells] = useState([]);
   const [foundWords, setFoundWords] = useState(new Set());
@@ -17,26 +17,45 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
     try {
       setLoading(true);
       setError(null);
+
       const res = await wellnessService.getDailyWordGrid();
+
       if (res?.success && res.puzzle) {
         setPuzzle(res.puzzle);
+
         if (res.user_score?.words_found) {
           setFoundWords(new Set(res.user_score.words_found));
         }
       }
+
       const lbRes = await wellnessService.getWordGridLeaderboard();
+
       if (lbRes?.success) {
         setLeaderboard(lbRes.leaderboard || []);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load daily Word Grid.');
+      setError(
+        err.response?.data?.message ||
+          'Failed to load daily Word Grid.'
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchDailyPuzzle();
+    let cancelled = false;
+
+    const loadPuzzle = async () => {
+      if (cancelled) return;
+      await fetchDailyPuzzle();
+    };
+
+    loadPuzzle();
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchDailyPuzzle]);
 
   useEffect(() => {
@@ -47,6 +66,7 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
     } else {
       clearInterval(timerRef.current);
     }
+
     return () => clearInterval(timerRef.current);
   }, [isPlaying]);
 
@@ -55,11 +75,12 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
   const handleCellClick = (r, c) => {
     if (!puzzle || !isPlaying) return;
 
-    const cellKey = `${r}-${c}`;
     let newSelection;
 
     if (selectedCells.some(([row, col]) => row === r && col === c)) {
-      newSelection = selectedCells.filter(([row, col]) => !(row === r && col === c));
+      newSelection = selectedCells.filter(
+        ([row, col]) => !(row === r && col === c)
+      );
     } else {
       newSelection = [...selectedCells, [r, c]];
     }
@@ -72,19 +93,38 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
       .join('')
       .toUpperCase();
 
-    const reverseWord = formedWord.split('').reverse().join('');
+    const reverseWord = formedWord
+      .split('')
+      .reverse()
+      .join('');
 
     const matchedTarget = targetWords.find(
-      (w) => w.word.toUpperCase() === formedWord || w.word.toUpperCase() === reverseWord
+      (w) =>
+        w.word.toUpperCase() === formedWord ||
+        w.word.toUpperCase() === reverseWord
     );
 
-    if (matchedTarget && !foundWords.has(matchedTarget.word.toUpperCase())) {
-      const updatedFound = new Set(foundWords).add(matchedTarget.word.toUpperCase());
+    if (
+      matchedTarget &&
+      !foundWords.has(matchedTarget.word.toUpperCase())
+    ) {
+      const updatedFound = new Set(foundWords).add(
+        matchedTarget.word.toUpperCase()
+      );
+
       setFoundWords(updatedFound);
       setSelectedCells([]);
 
-      const prog = Math.min(100, Math.round((updatedFound.size / targetWords.length) * 100));
-      if (onProgress) onProgress(prog, 3);
+      const prog = Math.min(
+        100,
+        Math.round(
+          (updatedFound.size / targetWords.length) * 100
+        )
+      );
+
+      if (onProgress) {
+        onProgress(prog, 3);
+      }
 
       if (updatedFound.size === targetWords.length) {
         handleFinishPuzzle(updatedFound);
@@ -94,8 +134,13 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
 
   const handleFinishPuzzle = async (finalWords) => {
     setIsPlaying(false);
+
     const wordsArr = Array.from(finalWords || foundWords);
-    const score = Math.max(100, wordsArr.length * 50 - Math.floor(timerSeconds / 5));
+
+    const score = Math.max(
+      100,
+      wordsArr.length * 50 - Math.floor(timerSeconds / 5)
+    );
 
     try {
       const res = await wellnessService.submitWordGridScore(
@@ -104,13 +149,32 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
         timerSeconds,
         score
       );
+
       if (res?.success) {
-        setScoreResult({ score, time: timerSeconds });
-        if (onComplete) onComplete(score, `Solved Word Grid in ${timerSeconds}s!`);
+        // FIX: Extract actual XP earned from response or fallback to 25
+        const xpEarned = res?.xp_awarded ?? res?.data?.xp_awarded ?? 25;
+
+        setScoreResult({
+          score,
+          time: timerSeconds,
+          xpEarned,
+        });
+
+        if (onComplete) {
+          // FIX: Pass xpEarned as first argument instead of game score points
+          onComplete(
+            xpEarned,
+            `Solved Word Grid in ${timerSeconds}s! (Score: ${score})`
+          );
+        }
       }
     } catch (err) {
       console.error(err);
-      if (onComplete) onComplete(score);
+
+      if (onComplete) {
+        // Fallback XP in case of error
+        onComplete(25, `Solved Word Grid in ${timerSeconds}s!`);
+      }
     }
   };
 
@@ -136,13 +200,21 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
       {/* PUZZLE HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
         <div>
-          <h3 className="text-base font-extrabold text-slate-800">{puzzle?.title || 'Daily Word Grid'}</h3>
-          <span className="text-xs text-indigo-600 font-semibold">Theme: {puzzle?.theme}</span>
+          <h3 className="text-base font-extrabold text-slate-800">
+            {puzzle?.title || 'Daily Word Grid'}
+          </h3>
+
+          <span className="text-xs text-indigo-600 font-semibold">
+            Theme: {puzzle?.theme}
+          </span>
         </div>
+
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-slate-100 px-3 py-1 text-xs font-mono font-bold text-slate-700">
-            ⏱ {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+            ⏱ {Math.floor(timerSeconds / 60)}:
+            {(timerSeconds % 60).toString().padStart(2, '0')}
           </div>
+
           <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-extrabold text-emerald-800">
             {foundWords.size} / {targetWords.length} Words Found
           </span>
@@ -154,14 +226,22 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
         <div className="flex justify-center p-2">
           <div className="inline-grid gap-2 select-none bg-slate-100 p-4 rounded-3xl shadow-inner">
             {puzzle?.grid?.map((row, rIdx) => (
-              <div key={rIdx} className="flex gap-2 justify-center">
+              <div
+                key={rIdx}
+                className="flex gap-2 justify-center"
+              >
                 {row.map((letter, cIdx) => {
-                  const isSelected = selectedCells.some(([r, c]) => r === rIdx && c === cIdx);
+                  const isSelected = selectedCells.some(
+                    ([r, c]) => r === rIdx && c === cIdx
+                  );
+
                   return (
                     <button
                       key={cIdx}
                       type="button"
-                      onClick={() => handleCellClick(rIdx, cIdx)}
+                      onClick={() =>
+                        handleCellClick(rIdx, cIdx)
+                      }
                       className={`h-11 w-11 sm:h-12 sm:w-12 rounded-2xl text-base sm:text-lg font-black transition transform active:scale-95 flex items-center justify-center font-mono ${
                         isSelected
                           ? 'bg-indigo-600 text-white shadow-md scale-105'
@@ -180,10 +260,16 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
         {/* TARGET WORDS CHECKLIST & LEADERBOARD */}
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Target Words</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Target Words
+            </div>
+
             <div className="space-y-1.5">
               {targetWords.map((item, idx) => {
-                const isFound = foundWords.has(item.word.toUpperCase());
+                const isFound = foundWords.has(
+                  item.word.toUpperCase()
+                );
+
                 return (
                   <div
                     key={idx}
@@ -194,7 +280,10 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
                     }`}
                   >
                     <span>{item.word}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">{item.hint}</span>
+
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {item.hint}
+                    </span>
                   </div>
                 );
               })}
@@ -203,12 +292,23 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
 
           {leaderboard.length > 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Daily Leaderboard</div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Daily Leaderboard
+              </div>
+
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {leaderboard.map((item, idx) => (
-                  <div key={item.id} className="flex justify-between text-xs py-1 border-b border-slate-50">
-                    <span className="font-semibold text-slate-700">#{idx + 1} {item.username}</span>
-                    <span className="font-mono text-indigo-700 font-bold">{item.score} pts</span>
+                  <div
+                    key={item.id}
+                    className="flex justify-between text-xs py-1 border-b border-slate-50"
+                  >
+                    <span className="font-semibold text-slate-700">
+                      #{idx + 1} {item.username}
+                    </span>
+
+                    <span className="font-mono text-indigo-700 font-bold">
+                      {item.score} pts
+                    </span>
                   </div>
                 ))}
               </div>
@@ -218,11 +318,13 @@ export const WordGridActivity = ({ onProgress, onComplete, isSubmitting }) => {
       </div>
 
       {/* FINISH BUTTON OR RESULTS */}
-      {foundWords.size > 0 && foundWords.size === targetWords.length && (
-        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center text-xs font-extrabold text-emerald-900">
-          🎉 All words located! Score: {scoreResult?.score || 300} pts recorded.
-        </div>
-      )}
+      {foundWords.size > 0 &&
+        foundWords.size === targetWords.length && (
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center text-xs font-extrabold text-emerald-900">
+            🎉 All words located! Score:{' '}
+            {scoreResult?.score || 300} pts recorded.
+          </div>
+        )}
     </div>
   );
 };

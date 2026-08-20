@@ -15,9 +15,12 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from .models import Profile
 
+# Notification Helper Import (Path apney notifications app ke mutabiq adjust kar lein)
+from apps.notifications.services import create_security_notification  
+
 User = get_user_model()
 
-# Cleaned & Extended Profile View
+
 class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -30,11 +33,18 @@ class UserProfileAPIView(APIView):
     def put(self, request):
         profile, _ = Profile.objects.get_or_create(user=request.user)
         
-        # Password update logic (if user provided new password)
+        # Password update logic with Security Notification
         password = request.data.get('password')
         if password:
             request.user.set_password(password)
             request.user.save()
+
+            # Security alert trigger when password is changed from profile
+            create_security_notification(
+                user=request.user,
+                title="Security Alert: Password Updated",
+                message="Your account password was updated successfully via profile settings."
+            )
 
         serializer = ProfileSerializer(profile, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
@@ -55,10 +65,25 @@ class LoginAPIView(APIView):
         if serializer.is_valid():
             user = serializer.validated_data['user']
             refresh = RefreshToken.for_user(user)
+
+            # Security notification on login
+            create_security_notification(
+                user=user,
+                title="New Login Detected",
+                message="Your account was logged in successfully."
+            )
+
             return Response({
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
-                "message": "Login successful"
+                "message": "Login successful",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "is_counselor": user.is_counselor,
+                }
+                
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -114,6 +139,15 @@ class ResetPasswordAPIView(APIView):
         if user is not None and default_token_generator.check_token(user, token):
             user.set_password(new_password)
             user.save()
+
+            # Security notification on successful password reset
+            create_security_notification(
+                user=user,
+                title="Security Alert: Password Reset Successful",
+                message="Your account password was successfully reset via email request."
+            )
+
             return Response({"detail": "Password has been reset successfully."}, status=status.HTTP_200_OK)
         else:
             return Response({"detail": "Invalid or expired reset link/token."}, status=status.HTTP_400_BAD_REQUEST)
+        

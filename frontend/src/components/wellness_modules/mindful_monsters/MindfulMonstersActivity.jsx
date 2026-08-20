@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
 const PHASE_CONFIG = {
@@ -8,34 +8,80 @@ const PHASE_CONFIG = {
   relax: { emoji: '✨', color: 'from-emerald-500 to-teal-600', label: 'Rest & Settle' },
 };
 
-// Strict Sequence Order Rules
 const SEQUENCE = ['inhale', 'hold', 'exhale', 'relax'];
 
 const DEFAULT_STEPS = [
-  { id: 1, title: 'Monster Inhale', phase: 'inhale', duration_seconds: 4, instruction: 'Draw deep breath through your diaphragm. Feel the monster expand with positive energy.', order: 1 },
-  { id: 2, title: 'Hold & Lock', phase: 'hold', duration_seconds: 4, instruction: 'Hold gently at the top. Let stillness settle into every muscle.', order: 2 },
-  { id: 3, title: 'Monster Roar Exhale', phase: 'exhale', duration_seconds: 4, instruction: 'Breathe out slowly and evenly. Blow away all doubt and tension.', order: 3 },
-  { id: 4, title: 'Centered & Grounded', phase: 'relax', duration_seconds: 4, instruction: 'Rest quietly in the space between breaths. You are balanced, ready, and locked in.', order: 4 },
+  {
+    id: 1,
+    title: 'Monster Inhale',
+    phase: 'inhale',
+    duration_seconds: 4,
+    instruction:
+      'Draw deep breath through your diaphragm. Feel the monster expand with positive energy.',
+    order: 1,
+  },
+  {
+    id: 2,
+    title: 'Hold & Lock',
+    phase: 'hold',
+    duration_seconds: 4,
+    instruction:
+      'Hold gently at the top. Let stillness settle into every muscle.',
+    order: 2,
+  },
+  {
+    id: 3,
+    title: 'Monster Roar Exhale',
+    phase: 'exhale',
+    duration_seconds: 4,
+    instruction:
+      'Breathe out slowly and evenly. Blow away all doubt and tension.',
+    order: 3,
+  },
+  {
+    id: 4,
+    title: 'Centered & Grounded',
+    phase: 'relax',
+    duration_seconds: 4,
+    instruction:
+      'Rest quietly in the space between breaths. You are balanced, ready, and locked in.',
+    order: 4,
+  },
 ];
 
-export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }) => {
+export const MindfulMonstersActivity = ({
+  onProgress,
+  onComplete,
+  isSubmitting = false,
+}) => {
   const [steps, setSteps] = useState(DEFAULT_STEPS);
   const [isActive, setIsActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [stepTimer, setStepTimer] = useState(4);
   const [completedRounds, setCompletedRounds] = useState(0);
+  const [isFinishing, setIsFinishing] = useState(false);
 
-  // Normalizer: Guarantees EXACTLY Inhale -> Hold -> Exhale -> Relax sequence
+  // Guarantees EXACTLY Inhale -> Hold -> Exhale -> Relax sequence
   const enforceStrictSequence = useCallback((rawSteps) => {
-    if (!Array.isArray(rawSteps) || rawSteps.length === 0) return DEFAULT_STEPS;
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
+      return DEFAULT_STEPS;
+    }
 
     const ordered = SEQUENCE.map((seqPhase, index) => {
       const found = rawSteps.find(
-        (s) => s.phase?.toLowerCase() === seqPhase || (seqPhase === 'relax' && s.phase?.toLowerCase() === 'rest')
+        (s) =>
+          s.phase?.toLowerCase() === seqPhase ||
+          (seqPhase === 'relax' && s.phase?.toLowerCase() === 'rest')
       );
+
       if (found) {
-        return { ...found, phase: seqPhase, order: index + 1 };
+        return {
+          ...found,
+          phase: seqPhase,
+          order: index + 1,
+        };
       }
+
       return DEFAULT_STEPS[index];
     });
 
@@ -44,18 +90,28 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
 
   // Fetch API steps and normalize sequence
   useEffect(() => {
+    let isMounted = true;
     wellnessService
       .getMindfulMonsterSteps()
       .then((res) => {
-        if (res?.success && Array.isArray(res.steps) && res.steps.length > 0) {
+        if (!isMounted) return;
+        if (
+          res?.success &&
+          Array.isArray(res.steps) &&
+          res.steps.length > 0
+        ) {
           const cleanSteps = enforceStrictSequence(res.steps);
           setSteps(cleanSteps);
           setStepTimer(cleanSteps[0]?.duration_seconds || 4);
         }
       })
       .catch(() => {
-        setSteps(DEFAULT_STEPS);
+        if (isMounted) setSteps(DEFAULT_STEPS);
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, [enforceStrictSequence]);
 
   // Handle countdown timer safely
@@ -69,14 +125,15 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
             return prevTimer - 1;
           }
 
-          // Move to next step seamlessly
           setCurrentStepIndex((prevIdx) => {
             const nextIdx = (prevIdx + 1) % steps.length;
+
             if (nextIdx === 0) {
               setCompletedRounds((r) => r + 1);
             }
-            // Set the new timer value directly for the next step
+
             setStepTimer(steps[nextIdx]?.duration_seconds || 4);
+
             return nextIdx;
           });
 
@@ -93,11 +150,19 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
   // Report progress to parent component
   useEffect(() => {
     const totalSteps = steps.length;
+
     const progress = Math.min(
       100,
-      Math.round(((completedRounds * totalSteps + currentStepIndex) / (totalSteps * 2)) * 100)
+      Math.round(
+        ((completedRounds * totalSteps + currentStepIndex) /
+          (totalSteps * 2)) *
+          100
+      )
     );
-    if (onProgress) onProgress(progress, 3);
+
+    if (onProgress) {
+      onProgress(progress, 3);
+    }
   }, [completedRounds, currentStepIndex, steps.length, onProgress]);
 
   const activeStep = steps[currentStepIndex] || steps[0];
@@ -105,15 +170,32 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
   const phaseConfig = PHASE_CONFIG[phaseKey] || PHASE_CONFIG.inhale;
 
   const handleFinish = async () => {
+    if (isFinishing || isSubmitting) return;
+
     setIsActive(false);
-    const totalStepsCompleted = completedRounds * steps.length + currentStepIndex;
+    setIsFinishing(true);
+
+    const totalStepsCompleted =
+      completedRounds * steps.length + currentStepIndex;
 
     try {
-      await wellnessService.recordMindfulMonsterSession(totalStepsCompleted);
-    } catch (_) {}
+      await wellnessService.recordMindfulMonsterSession(
+        totalStepsCompleted
+      );
+    } catch (err) {
+      console.warn("Session record fallback:", err);
+    }
 
-    if (onComplete) {
-      onComplete(100, `Completed ${completedRounds} full rounds of Mindful Monster breathing.`);
+    try {
+      if (onComplete) {
+        // Parent container (View/Page) logic sync
+        await onComplete(
+          100,
+          `Completed ${completedRounds} full rounds of Mindful Monster breathing.`
+        );
+      }
+    } finally {
+      setIsFinishing(false);
     }
   };
 
@@ -126,6 +208,8 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
       ? 'scale-90'
       : 'scale-95';
 
+  const isLoading = isSubmitting || isFinishing;
+
   return (
     <div className="space-y-6 text-center select-none">
       {/* ANIMATED MONSTER CIRCLE */}
@@ -136,7 +220,11 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
           }`}
         >
           <div className="text-6xl">{phaseConfig.emoji}</div>
-          <div className="mt-2 text-3xl font-black text-white font-mono">{stepTimer}s</div>
+
+          <div className="mt-2 text-3xl font-black text-white font-mono">
+            {stepTimer}s
+          </div>
+
           <div className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/80">
             {phaseConfig.label}
           </div>
@@ -150,18 +238,30 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
             <span
               key={s.id || idx}
               className={`h-2 rounded-full transition-all duration-300 ${
-                idx === currentStepIndex ? 'w-8 bg-indigo-600' : 'w-2 bg-slate-300'
+                idx === currentStepIndex
+                  ? 'w-8 bg-indigo-600'
+                  : 'w-2 bg-slate-300'
               }`}
             />
           ))}
         </div>
 
         <div className="text-xs font-extrabold uppercase tracking-wider text-indigo-600">
-          Phase {currentStepIndex + 1} of {steps.length}: {phaseKey.toUpperCase()}
+          Phase {currentStepIndex + 1} of {steps.length}:{' '}
+          {phaseKey.toUpperCase()}
         </div>
-        <h3 className="text-base font-extrabold text-slate-800">{activeStep?.title}</h3>
-        <p className="text-xs text-slate-600 leading-relaxed">{activeStep?.instruction}</p>
-        <div className="text-[10px] text-slate-400">Completed Rounds: {completedRounds}</div>
+
+        <h3 className="text-base font-extrabold text-slate-800">
+          {activeStep?.title}
+        </h3>
+
+        <p className="text-xs text-slate-600 leading-relaxed">
+          {activeStep?.instruction}
+        </p>
+
+        <div className="text-[10px] text-slate-400">
+          Completed Rounds: {completedRounds}
+        </div>
       </div>
 
       {/* CONTROLS */}
@@ -169,27 +269,32 @@ export const MindfulMonstersActivity = ({ onProgress, onComplete, isSubmitting }
         {!isActive ? (
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => setIsActive(true)}
-            className="rounded-2xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 transition"
+            className="rounded-2xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition"
           >
-            {completedRounds > 0 || currentStepIndex > 0 ? '▶ Resume Session' : '▶ Begin Guided Breathing'}
+            {completedRounds > 0 || currentStepIndex > 0
+              ? '▶ Resume Session'
+              : '▶ Begin Guided Breathing'}
           </button>
         ) : (
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => setIsActive(false)}
-            className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-amber-600 transition"
+            className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-amber-600 disabled:opacity-50 transition"
           >
             ⏸ Pause
           </button>
         )}
+
         <button
           type="button"
           onClick={handleFinish}
-          disabled={isSubmitting}
-          className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50 transition"
+          disabled={isLoading}
+          className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer"
         >
-          ✓ Finish & Claim XP
+          {isLoading ? 'Processing...' : '✓ Finish & Claim XP'}
         </button>
       </div>
     </div>

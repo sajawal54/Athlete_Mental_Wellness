@@ -1,137 +1,218 @@
-from django.urls import path
+from django.urls import include, path
 
 from .views import (
-    # Core Shared Lifecycle
-    WellnessModuleListAPIView,
-    WellnessModuleDetailAPIView,
-    WellnessModuleStartAPIView,
-    WellnessModuleProgressUpdateAPIView,
-    WellnessModuleCompleteAPIView,
-    WellnessMyProgressAPIView,
-    # 1. Codex
-    codex_categories_view,
-    codex_lesson_detail_view,
-    codex_lesson_start_view,
-    codex_lesson_complete_view,
-    # 2. Mindful Monsters
-    mindful_monsters_steps_view,
-    mindful_monsters_record_view,
-    # 3. Breathwork
-    breathwork_info_view,
-    breathwork_record_view,
-    # 4. Setback Reframer
-    setback_reframe_generate_view,
-    setback_reframe_history_view,
-    # 5. Grit Garden
-    grit_garden_save_view,
-    grit_garden_history_view,
-    # 6. Echoes of Empathy
-    echoes_of_empathy_scenarios_view,
-    echoes_of_empathy_submit_view,
-    # 7. Counselor Hub
-    counselor_list_view,
-    counselor_request_create_view,
-    counselor_my_requests_view,
-    # 8. Transition Support
-    transition_resources_view,
-    transition_resource_mark_viewed_view,
-    # 9. Locker Room Realities
-    locker_room_scenarios_view,
-    locker_room_decide_view,
-    # 10. Reaction Zone
-    reaction_zone_prompts_view,
-    reaction_zone_submit_score_view,
-    reaction_zone_leaderboard_view,
-    # 11. Integrity Crossroads
-    integrity_scenarios_view,
-    integrity_submit_view,
-    # 12. Self-Talk Detective
-    self_talk_analyze_view,
-    self_talk_history_view,
-    # 13. Career Forge
-    career_forge_roadmap_view,
-    career_forge_save_view,
-    # 14. Word Grid
-    word_grid_daily_view,
-    word_grid_submit_view,
-    word_grid_leaderboard_view,
-    # ai assisstant view
     WellnessAIAssistantView,
+    WellnessModuleCompleteAPIView,
+    WellnessModuleDetailAPIView,
+    WellnessModuleListAPIView,
+    WellnessModuleProgressUpdateAPIView,
+    WellnessModuleStartAPIView,
+    WellnessMyProgressAPIView,
 )
 
+
 urlpatterns = [
-    # -------------------------------------------------------------
-    # Shared Module Shell Lifecycle Routes
-    # -------------------------------------------------------------
-    path("modules/", WellnessModuleListAPIView.as_view(), name="wellness-modules"),
-    path("modules/<slug:slug>/", WellnessModuleDetailAPIView.as_view(), name="wellness-module-detail"),
-    path("modules/<slug:slug>/start/", WellnessModuleStartAPIView.as_view(), name="wellness-module-start"),
-    path("modules/<slug:slug>/progress/update/", WellnessModuleProgressUpdateAPIView.as_view(), name="wellness-module-progress-update"),
-    path("modules/<slug:slug>/complete/", WellnessModuleCompleteAPIView.as_view(), name="wellness-module-complete"),
-    path("my-progress/", WellnessMyProgressAPIView.as_view(), name="wellness-my-progress"),
-    path('ai-assistant/', WellnessAIAssistantView.as_view(), name='wellness-ai-assistant'),
+    # =============================================================
+    # CORE WELLNESS MODULE LIFECYCLE
+    # =============================================================
 
-    # -------------------------------------------------------------
-    # Module-Specific Routes
-    # -------------------------------------------------------------
-    # 1. Codex
-    path("codex/categories/", codex_categories_view, name="codex-categories"),
-    path("codex/lessons/<int:lesson_id>/", codex_lesson_detail_view, name="codex-lesson-detail"),
-    path("codex/lessons/<int:lesson_id>/start/", codex_lesson_start_view, name="codex-lesson-start"),
-    path("codex/lessons/<int:lesson_id>/complete/", codex_lesson_complete_view, name="codex-lesson-complete"),
+    path(
+        "modules/",
+        WellnessModuleListAPIView.as_view(),
+        name="wellness-modules",
+    ),
 
-    # 2. Mindful Monsters
-    path("mindful-monsters/steps/", mindful_monsters_steps_view, name="mindful-monsters-steps"),
-    path("mindful-monsters/record/", mindful_monsters_record_view, name="mindful-monsters-record"),
+    path(
+        "modules/<slug:slug>/",
+        WellnessModuleDetailAPIView.as_view(),
+        name="wellness-module-detail",
+    ),
 
-    # 3. Breathwork
-    path("breathwork/info/", breathwork_info_view, name="breathwork-info"),
-    path("breathwork/record/", breathwork_record_view, name="breathwork-record"),
+    path(
+        "modules/<slug:slug>/start/",
+        WellnessModuleStartAPIView.as_view(),
+        name="wellness-module-start",
+    ),
 
-    # 4. Setback Reframer
-    path("setback-reframer/generate/", setback_reframe_generate_view, name="setback-reframer-generate"),
-    path("setback-reframer/history/", setback_reframe_history_view, name="setback-reframer-history"),
+    path(
+        "modules/<slug:slug>/progress/update/",
+        WellnessModuleProgressUpdateAPIView.as_view(),
+        name="wellness-module-progress-update",
+    ),
 
-    # 5. Grit Garden
-    path("grit-garden/save/", grit_garden_save_view, name="grit-garden-save"),
-    path("grit-garden/history/", grit_garden_history_view, name="grit-garden-history"),
+    path(
+        "modules/<slug:slug>/complete/",
+        WellnessModuleCompleteAPIView.as_view(),
+        name="wellness-module-complete",
+    ),
 
-    # 6. Echoes of Empathy
-    path("echoes-of-empathy/scenarios/", echoes_of_empathy_scenarios_view, name="echoes-of-empathy-scenarios"),
-    path("echoes-of-empathy/submit/", echoes_of_empathy_submit_view, name="echoes-of-empathy-submit"),
+    path(
+        "my-progress/",
+        WellnessMyProgressAPIView.as_view(),
+        name="wellness-my-progress",
+    ),
 
-    # 7. Counselor Hub
-    path("counselor-hub/counselors/", counselor_list_view, name="counselor-hub-list"),
-    path("counselor-hub/request/", counselor_request_create_view, name="counselor-hub-request"),
-    path("counselor-hub/my-requests/", counselor_my_requests_view, name="counselor-hub-my-requests"),
+    # =============================================================
+    # WELLNESS AI ASSISTANT
+    # =============================================================
 
-    # 8. Transition Support
-    path("transition-support/resources/", transition_resources_view, name="transition-support-resources"),
-    path("transition-support/resource/<int:resource_id>/view/", transition_resource_mark_viewed_view, name="transition-support-view"),
+    path(
+        "ai-assistant/",
+        WellnessAIAssistantView.as_view(),
+        name="wellness-ai-assistant",
+    ),
 
-    # 9. Locker Room Realities
-    path("locker-room-realities/scenarios/", locker_room_scenarios_view, name="locker-room-scenarios"),
-    path("locker-room-realities/decide/", locker_room_decide_view, name="locker-room-decide"),
+    # =============================================================
+    # 1. CODEX
+    # =============================================================
 
-    # 10. Reaction Zone
-    path("reaction-zone/prompts/", reaction_zone_prompts_view, name="reaction-zone-prompts"),
-    path("reaction-zone/submit-score/", reaction_zone_submit_score_view, name="reaction-zone-submit"),
-    path("reaction-zone/leaderboard/", reaction_zone_leaderboard_view, name="reaction-zone-leaderboard"),
+    path(
+        "codex/",
+        include(
+            "apps.wellness.modules.codex.urls"
+        ),
+    ),
 
-    # 11. Integrity Crossroads
-    path("integrity-crossroads/scenarios/", integrity_scenarios_view, name="integrity-crossroads-scenarios"),
-    path("integrity-crossroads/submit/", integrity_submit_view, name="integrity-crossroads-submit"),
+    # =============================================================
+    # 2. MINDFUL MONSTERS
+    # =============================================================
 
-    # 12. Self-Talk Detective
-    path("self-talk-detective/analyze/", self_talk_analyze_view, name="self-talk-detective-analyze"),
-    path("self-talk-detective/history/", self_talk_history_view, name="self-talk-detective-history"),
+    path(
+        "mindful-monsters/",
+        include(
+            "apps.wellness.modules.mindful_monsters.urls"
+        ),
+    ),
 
-    # 13. Career Forge
-    path("career-forge/roadmap/", career_forge_roadmap_view, name="career-forge-roadmap"),
-    path("career-forge/save/", career_forge_save_view, name="career-forge-save"),
+    # =============================================================
+    # 3. BREATHWORK
+    # =============================================================
 
-    # 14. Word Grid
-    path("word-grid/daily/", word_grid_daily_view, name="word-grid-daily"),
-    path("word-grid/submit/", word_grid_submit_view, name="word-grid-submit"),
-    path("word-grid/leaderboard/", word_grid_leaderboard_view, name="word-grid-leaderboard"),
+    path(
+        "breathwork/",
+        include(
+            "apps.wellness.modules.breathwork.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 4. SETBACK REFRAMER
+    # =============================================================
+
+    path(
+        "setback-reframer/",
+        include(
+            "apps.wellness.modules.setback_reframer.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 5. GRIT GARDEN
+    # =============================================================
+
+    path(
+        "grit-garden/",
+        include(
+            "apps.wellness.modules.grit_garden.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 6. ECHOES OF EMPATHY
+    # =============================================================
+
+    path(
+        "echoes-of-empathy/",
+        include(
+            "apps.wellness.modules.echoes_of_empathy.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 7. COUNSELOR HUB
+    # =============================================================
+
+    path(
+        "counselor-hub/",
+        include(
+            "apps.wellness.modules.counselor_hub.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 8. TRANSITION SUPPORT
+    # =============================================================
+
+    path(
+        "transition-support/",
+        include(
+            "apps.wellness.modules.transition_support.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 9. LOCKER ROOM REALITIES
+    # =============================================================
+
+    path(
+        "locker-room-realities/",
+        include(
+            "apps.wellness.modules.locker_room_realities.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 10. REACTION ZONE
+    # =============================================================
+
+    path(
+        "reaction-zone/",
+        include(
+            "apps.wellness.modules.reaction_zone.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 11. INTEGRITY CROSSROADS
+    # =============================================================
+
+    path(
+        "integrity-crossroads/",
+        include(
+            "apps.wellness.modules.integrity_crossroads.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 12. SELF-TALK DETECTIVE
+    # =============================================================
+
+    path(
+        "self-talk-detective/",
+        include(
+            "apps.wellness.modules.self_talk_detective.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 13. CAREER FORGE
+    # =============================================================
+
+    path(
+        "career-forge/",
+        include(
+            "apps.wellness.modules.career_forge.urls"
+        ),
+    ),
+
+    # =============================================================
+    # 14. WORD GRID
+    # =============================================================
+
+    path(
+        "word-grid/",
+        include(
+            "apps.wellness.modules.word_grid.urls"
+        ),
+    ),
 ]

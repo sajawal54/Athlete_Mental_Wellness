@@ -1,43 +1,20 @@
 from django.urls import path
 
 from .views import (
-    transition_support_info,
-    resource_list,
-    resource_detail,
-    mark_viewed,
-    viewed_resources,
+    transition_resources_view,
+    transition_resource_mark_viewed_view
 )
 
-
 urlpatterns = [
-
-    path(
-        "",
-        transition_support_info,
-        name="transition-support-info",
-    ),
-
     path(
         "resources/",
-        resource_list,
-        name="transition-resource-list",
+        transition_resources_view,
+        name="transition-support-resources",
     ),
 
     path(
-        "resources/<int:resource_id>/",
-        resource_detail,
-        name="transition-resource-detail",
-    ),
-
-    path(
-        "resources/<int:resource_id>/view/",
-        mark_viewed,
-        name="transition-resource-view",
-    ),
-
-    path(
-        "views/",
-        viewed_resources,
-        name="transition-resource-views",
+        "resource/<int:resource_id>/view/",
+        transition_resource_mark_viewed_view,
+        name="transition-support-view",
     ),
 ]

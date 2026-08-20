@@ -1,9 +1,14 @@
+
 from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import Profile
 from apps.goals.models import DailyGoal
 from apps.moods.models import MoodLog
+from apps.notifications.services import (
+    create_achievement_notification,
+    create_level_notification,
+)
 
 from .models import (
     XPHistory,
@@ -20,6 +25,9 @@ def award_xp(user, amount, source, description=""):
 
         profile, _ = Profile.objects.get_or_create(user=user)
 
+        # Store previous level so we can detect level-up
+        previous_level = profile.level
+
         # Add XP through Profile's existing logic
         profile.add_xp(amount)
         profile.refresh_from_db()
@@ -34,6 +42,25 @@ def award_xp(user, amount, source, description=""):
 
         # Check newly earned badges
         new_badges = check_and_award_badges(user)
+
+        # Level-up notification
+        if profile.level > previous_level:
+            create_level_notification(
+                user=user,
+                new_level=profile.level,
+            )
+
+        # Achievement notifications for newly earned badges
+        for badge in new_badges:
+            create_achievement_notification(
+                user=user,
+                title=f"New Achievement: {badge.name}",
+                message=(
+                    f"Congratulations! You earned the "
+                    f"{badge.name} achievement."
+                ),
+                action_url="/trophy-room",
+            )
 
         return {
             "xp": profile.xp,
@@ -185,6 +212,8 @@ def claim_reward(user, reward):
                 "redeemed_at": user_reward.redeemed_at,
             },
         }
+
+
 def redeem_reward(user, user_reward):
     """
     Change a claimed reward into redeemed state.

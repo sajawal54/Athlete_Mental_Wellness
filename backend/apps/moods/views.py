@@ -1,3 +1,4 @@
+
 from django.db import transaction
 from django.utils import timezone
 
@@ -11,6 +12,10 @@ from .serializers import MoodLogSerializer
 
 from apps.accounts.models import Profile
 from apps.gamification.service import award_xp
+from apps.notifications.services import (
+    create_mood_notification,
+    create_streak_notification,
+)
 
 
 class MoodPagination(PageNumberPagination):
@@ -103,6 +108,15 @@ class MoodLogListCreateView(generics.ListCreateAPIView):
 
             profile.refresh_from_db()
 
+            # Notification: mood check-in completed
+            create_mood_notification(user)
+
+            # Notification: streak updated
+            create_streak_notification(
+                user=user,
+                streak=profile.streak,
+            )
+
         response_data = serializer.data
 
         response_data["ai_message"] = get_ai_message(
@@ -142,3 +156,4 @@ class MoodHistoryClearView(APIView):
             {"message": "Mood history cleared successfully"},
             status=status.HTTP_204_NO_CONTENT
         )
+

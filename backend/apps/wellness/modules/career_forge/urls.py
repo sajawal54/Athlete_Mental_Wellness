@@ -1,9 +1,21 @@
 from django.urls import path
 
-from .views import career_forge_info, career_forge_start, career_forge_complete
+from .views import (
+    career_forge_roadmap_view,
+    career_forge_save_view,
+)
+
 
 urlpatterns = [
-    path("", career_forge_info, name="career-forge-info"),
-    path("start/", career_forge_start, name="career-forge-start"),
-    path("complete/", career_forge_complete, name="career-forge-complete"),
+    path(
+        "roadmap/",
+        career_forge_roadmap_view,
+        name="career-forge-roadmap",
+    ),
+
+    path(
+        "save/",
+        career_forge_save_view,
+        name="career-forge-save",
+    ),
 ]

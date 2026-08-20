@@ -1,7 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
-export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitting }) => {
+const DEFAULT_SCENARIO = {
+  id: 'ai_integrity_1',
+  category: 'Sportsmanship & Ethics',
+  title: 'Unnoticed Out-of-Bounds',
+  dilemma:
+    'During a crucial championship point, the ball skims your fingertips before going out. The referee awards the point to your team. Do you speak up?',
+  choices: [
+    {
+      text: 'Inform the referee immediately that you touched the ball, risking the point for sportsmanship.',
+    },
+    {
+      text: 'Stay quiet and accept the point since the official made the call.',
+    },
+    {
+      text: 'Wait to see if opponents complain before making any admission.',
+    },
+  ],
+  correct_choice_index: 0,
+};
+
+export const IntegrityCrossroadsActivity = ({
+  onProgress,
+  onComplete,
+  isSubmitting,
+}) => {
   const [scenarios, setScenarios] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoiceIndex, setSelectedChoiceIndex] = useState(null);
@@ -10,20 +34,6 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-
-  // Fallback Scenario in case AI service is unreachable
-  const defaultScenario = {
-    id: 'ai_integrity_1',
-    category: 'Sportsmanship & Ethics',
-    title: 'Unnoticed Out-of-Bounds',
-    dilemma: 'During a crucial championship point, the ball skims your fingertips before going out. The referee awards the point to your team. Do you speak up?',
-    choices: [
-      { text: 'Inform the referee immediately that you touched the ball, risking the point for sportsmanship.' },
-      { text: 'Stay quiet and accept the point since the official made the call.' },
-      { text: 'Wait to see if opponents complain before making any admission.' }
-    ],
-    correct_choice_index: 0
-  };
 
   const fetchScenarios = useCallback(async () => {
     try {
@@ -51,15 +61,22 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
       `;
 
       let groqRes = null;
+
       if (typeof wellnessService.getAIResponse === 'function') {
-        groqRes = await wellnessService.getAIResponse('integrity_crossroads', aiPrompt);
+        groqRes = await wellnessService.getAIResponse(
+          'integrity_crossroads',
+          aiPrompt
+        );
       }
 
       const rawData = groqRes?.data || groqRes?.result || groqRes;
       let parsed = null;
 
       if (typeof rawData === 'string') {
-        const cleanJson = rawData.substring(rawData.indexOf('['), rawData.lastIndexOf(']') + 1);
+        const cleanJson = rawData.substring(
+          rawData.indexOf('['),
+          rawData.lastIndexOf(']') + 1
+        );
         parsed = JSON.parse(cleanJson);
       } else if (Array.isArray(rawData)) {
         parsed = rawData;
@@ -70,25 +87,30 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
       } else {
         // Fallback to service API or hardcoded scenario
         const res = await wellnessService.getIntegrityScenarios();
+
         if (res?.success && res?.scenarios?.length > 0) {
           setScenarios(res.scenarios);
         } else {
-          setScenarios([defaultScenario]);
+          setScenarios([DEFAULT_SCENARIO]);
         }
       }
     } catch (err) {
       console.error('Failed to fetch AI integrity scenarios:', err);
-      setScenarios([defaultScenario]);
+      setScenarios([DEFAULT_SCENARIO]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchScenarios();
+    const timer = setTimeout(() => {
+      fetchScenarios();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [fetchScenarios]);
 
-  const activeScenario = scenarios[currentIndex] || defaultScenario;
+  const activeScenario = scenarios[currentIndex] || DEFAULT_SCENARIO;
 
   const handleSubmitChoice = async () => {
     if (selectedChoiceIndex === null || !activeScenario) {
@@ -100,7 +122,8 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
       setSubmitting(true);
       setError(null);
 
-      const chosenOption = activeScenario.choices[selectedChoiceIndex]?.text;
+      const chosenOption =
+        activeScenario.choices[selectedChoiceIndex]?.text;
 
       // Ask AI to evaluate choice and user reflection
       const evalPrompt = `
@@ -113,14 +136,23 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
         Evaluate this decision regarding integrity, sportsmanship, and character in concise English.
         Return ONLY a JSON object:
         {
-          "score": ${selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0) ? 95 : 70},
+          "score": ${
+            selectedChoiceIndex ===
+            (activeScenario.correct_choice_index ?? 0)
+              ? 95
+              : 70
+          },
           "feedback": "Concise 2-sentence feedback evaluating their integrity stance and reflection."
         }
       `;
 
       let evalRes = null;
+
       if (typeof wellnessService.getAIResponse === 'function') {
-        evalRes = await wellnessService.getAIResponse('integrity_crossroads', evalPrompt);
+        evalRes = await wellnessService.getAIResponse(
+          'integrity_crossroads',
+          evalPrompt
+        );
       }
 
       const rawEval = evalRes?.data || evalRes?.result || evalRes;
@@ -128,12 +160,17 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
 
       if (typeof rawEval === 'string') {
         try {
-          const cleanJson = rawEval.substring(rawEval.indexOf('{'), rawEval.lastIndexOf('}') + 1);
+          const cleanJson = rawEval.substring(
+            rawEval.indexOf('{'),
+            rawEval.lastIndexOf('}') + 1
+          );
+
           parsedEval = JSON.parse(cleanJson);
-        } catch (_) {
+        } catch {
           parsedEval = {
             score: selectedChoiceIndex === 0 ? 95 : 70,
-            feedback: 'Upholding honesty and fair play builds long-term athletic respect and personal character.'
+            feedback:
+              'Upholding honesty and fair play builds long-term athletic respect and personal character.',
           };
         }
       } else if (typeof rawEval === 'object' && rawEval !== null) {
@@ -141,18 +178,31 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
       }
 
       const finalResult = {
-        score: parsedEval.score || (selectedChoiceIndex === 0 ? 95 : 70),
-        feedback: parsedEval.feedback || 'Your decision reflects how you navigate high-pressure ethical situations in sports.'
+        score:
+          parsedEval.score ||
+          (selectedChoiceIndex === 0 ? 95 : 70),
+        feedback:
+          parsedEval.feedback ||
+          'Your decision reflects how you navigate high-pressure ethical situations in sports.',
       };
 
       setResult(finalResult);
-      const prog = Math.min(100, Math.round(((currentIndex + 1) / scenarios.length) * 100));
-      if (onProgress) onProgress(prog, 3);
+
+      const prog = Math.min(
+        100,
+        Math.round(((currentIndex + 1) / scenarios.length) * 100)
+      );
+
+      if (onProgress) {
+        onProgress(prog, 3);
+      }
     } catch (err) {
       console.error('Integrity submission error:', err);
+
       setResult({
         score: selectedChoiceIndex === 0 ? 95 : 70,
-        feedback: 'Demonstrating honesty under pressure strengthens team culture and personal integrity.'
+        feedback:
+          'Demonstrating honesty under pressure strengthens team culture and personal integrity.',
       });
     } finally {
       setSubmitting(false);
@@ -169,9 +219,15 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
   };
 
   const handleFinish = () => {
-    if (onProgress) onProgress(100, 3);
+    if (onProgress) {
+      onProgress(100, 3);
+    }
+
     if (onComplete) {
-      onComplete(result?.score || 90, result?.feedback || 'Ethical crossroads completed.');
+      onComplete(
+        result?.score || 90,
+        result?.feedback || 'Ethical crossroads completed.'
+      );
     }
   };
 
@@ -197,8 +253,10 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
       {/* HEADER TABS & AI REFRESH */}
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
-          Scenario {currentIndex + 1} of {scenarios.length} • {activeScenario.category || 'Ethics'}
+          Scenario {currentIndex + 1} of {scenarios.length} •{' '}
+          {activeScenario.category || 'Ethics'}
         </span>
+
         <button
           type="button"
           onClick={fetchScenarios}
@@ -210,11 +268,13 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
 
       {/* PROGRESS BARS */}
       <div className="flex gap-1.5">
-        {scenarios.map((_, idx) => (
+        {scenarios.map((scenarioItem, idx) => (
           <span
-            key={idx}
+            key={scenarioItem.id || idx}
             className={`h-1.5 flex-1 rounded-full transition ${
-              idx === currentIndex ? 'bg-indigo-600' : 'bg-slate-200'
+              idx === currentIndex
+                ? 'bg-indigo-600'
+                : 'bg-slate-200'
             }`}
           />
         ))}
@@ -222,7 +282,10 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
 
       {/* DILEMMA CARD */}
       <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-1.5 text-left">
-        <h3 className="text-sm font-black text-slate-800">{activeScenario.title}</h3>
+        <h3 className="text-sm font-black text-slate-800">
+          {activeScenario.title}
+        </h3>
+
         <p className="text-xs leading-relaxed text-slate-700 font-medium">
           {activeScenario.dilemma}
         </p>
@@ -233,21 +296,32 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
           What would you do?
         </div>
+
         {activeScenario.choices?.map((choice, idx) => {
           const isSelected = selectedChoiceIndex === idx;
-          const text = typeof choice === 'string' ? choice : choice.text;
-          const isCorrect = result && idx === (activeScenario.correct_choice_index ?? 0);
+          const text =
+            typeof choice === 'string' ? choice : choice.text;
+
+          const isCorrect =
+            result &&
+            idx === (activeScenario.correct_choice_index ?? 0);
+
           const isUserChoice = result && isSelected;
 
-          let borderBgStyles = 'border-slate-200 bg-white hover:border-slate-300';
+          let borderBgStyles =
+            'border-slate-200 bg-white hover:border-slate-300';
+
           if (result) {
             if (isCorrect) {
-              borderBgStyles = 'border-emerald-500 bg-emerald-50/80 shadow-2xs';
+              borderBgStyles =
+                'border-emerald-500 bg-emerald-50/80 shadow-2xs';
             } else if (isUserChoice && !isCorrect) {
-              borderBgStyles = 'border-rose-400 bg-rose-50/80 shadow-2xs';
+              borderBgStyles =
+                'border-rose-400 bg-rose-50/80 shadow-2xs';
             }
           } else if (isSelected) {
-            borderBgStyles = 'border-indigo-600 bg-indigo-50/80 shadow-2xs';
+            borderBgStyles =
+              'border-indigo-600 bg-indigo-50/80 shadow-2xs';
           }
 
           return (
@@ -269,10 +343,12 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
               >
                 {String.fromCharCode(65 + idx)}
               </span>
+
               <div className="flex-1">
                 <span className="text-xs font-medium text-slate-800 leading-snug">
                   {text}
                 </span>
+
                 {result && isCorrect && (
                   <span className="block text-[10px] font-bold text-emerald-700 mt-0.5">
                     ✓ Highest Integrity Stance
@@ -290,6 +366,7 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Personal Reflection (Optional)
           </label>
+
           <textarea
             rows={2}
             value={reflection}
@@ -306,10 +383,16 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
           <button
             type="button"
             onClick={handleSubmitChoice}
-            disabled={submitting || isSubmitting || selectedChoiceIndex === null}
+            disabled={
+              submitting ||
+              isSubmitting ||
+              selectedChoiceIndex === null
+            }
             className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition"
           >
-            {submitting ? 'Analyzing Ethical Stance...' : 'Submit Decision & Evaluate'}
+            {submitting
+              ? 'Analyzing Ethical Stance...'
+              : 'Submit Decision & Evaluate'}
           </button>
         </div>
       )}
@@ -321,10 +404,12 @@ export const IntegrityCrossroadsActivity = ({ onProgress, onComplete, isSubmitti
             <h4 className="text-xs font-black text-slate-800">
               Values & Integrity Feedback
             </h4>
+
             <span className="text-sm font-black text-indigo-700 font-mono">
               Score: {result.score}%
             </span>
           </div>
+
           <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-xl border border-indigo-100">
             {result.feedback}
           </p>

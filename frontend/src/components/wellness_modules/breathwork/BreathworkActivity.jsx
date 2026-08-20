@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
 const DURATIONS = [
@@ -29,6 +29,36 @@ export const BreathworkActivity = ({ onProgress, onComplete, isSubmitting }) => 
   const totalSeconds = selectedDuration * 60;
   const progressPct = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 100));
 
+  const submitSession = useCallback(async (secondsCompleted) => {
+    setLoading(true);
+    setError(null);
+
+    const minsCompleted = Math.max(1, Math.round(secondsCompleted / 60));
+    try {
+      if (wellnessService.recordBreathworkSession) {
+        await wellnessService.recordBreathworkSession(selectedDuration, secondsCompleted);
+      }
+      
+      if (onComplete) {
+        onComplete(100, `Completed ${minsCompleted} min box breathwork session.`);
+      }
+    } catch (err) {
+      console.error('Failed to save breathwork session:', err);
+      setError('Progress local calculate ho gaya hai par server par save nahi ho saka.');
+      
+      if (onComplete) {
+        onComplete(100, `Completed ${minsCompleted} min box breathwork session (Offline).`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDuration, onComplete]);
+
+  const handleAutoFinish = useCallback(async (finalSeconds) => {
+    setIsActive(false);
+    await submitSession(finalSeconds);
+  }, [submitSession]);
+
   useEffect(() => {
     if (isActive && !isPaused) {
       timerRef.current = setInterval(() => {
@@ -53,7 +83,7 @@ export const BreathworkActivity = ({ onProgress, onComplete, isSubmitting }) => 
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [isActive, isPaused, totalSeconds, onProgress]);
+  }, [isActive, isPaused, totalSeconds, onProgress, handleAutoFinish]);
 
   const handleStart = () => {
     setIsActive(true);
@@ -65,41 +95,11 @@ export const BreathworkActivity = ({ onProgress, onComplete, isSubmitting }) => 
     setIsPaused((p) => !p);
   };
 
-  const handleAutoFinish = async (finalSeconds) => {
-    setIsActive(false);
-    await submitSession(finalSeconds);
-  };
-
   const handleFinish = async () => {
     if (elapsedSeconds < 10) return;
     setIsActive(false);
     clearInterval(timerRef.current);
     await submitSession(elapsedSeconds);
-  };
-
-  const submitSession = async (secondsCompleted) => {
-    setLoading(true);
-    setError(null);
-
-    const minsCompleted = Math.max(1, Math.round(secondsCompleted / 60));
-    try {
-      if (wellnessService.recordBreathworkSession) {
-        await wellnessService.recordBreathworkSession(selectedDuration, secondsCompleted);
-      }
-      
-      if (onComplete) {
-        onComplete(100, `Completed ${minsCompleted} min box breathwork session.`);
-      }
-    } catch (err) {
-      console.error('Failed to save breathwork session:', err);
-      setError('Progress local calculate ho gaya hai par server par save nahi ho saka.');
-      
-      if (onComplete) {
-        onComplete(100, `Completed ${minsCompleted} min box breathwork session (Offline).`);
-      }
-    } finally {
-      setLoading(false);
-    }
   };
 
   const formatTime = (secs) => {

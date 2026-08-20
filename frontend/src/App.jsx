@@ -17,6 +17,8 @@ import SoundTherapy from "./pages/SoundTherapy";
 import Affirmations from "./pages/Affirmations";
 import Gamification from "./pages/Gamification";
 import TrophyRoom from "./pages/TrophyRoom";
+import EmergencySupport from "./pages/EmergencySupport";
+import NotificationCenter from "./pages/NotificationCenter";
 
 // Athlete Wellness Hub Page (Houses all 10 Modules)
 import { WellnessHub } from "./pages/WellnessHub";
@@ -51,9 +53,9 @@ function App() {
           <Route path="/modules" element={<WellnessHub />} />
           <Route path="/wellness" element={<WellnessHub />} />
           <Route path="/wellness/:moduleSlug" element={<WellnessHub />} />
-
+          <Route path="/notifications" element={<NotificationCenter />}/>
           <Route path="/trophy-room" element={<TrophyRoom />} />
-          <Route path="/support" element={<Dashboard />} />
+          <Route path="/support" element={<EmergencySupport />} />
           <Route path="/settings" element={<Settings />} />
 
           {/* Additional pages */}

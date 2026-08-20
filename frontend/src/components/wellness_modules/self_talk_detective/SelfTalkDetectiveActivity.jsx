@@ -22,9 +22,13 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
 
     try {
       let res;
+
       // Step 1: Try primary Groq endpoint, then fallback to service call
       if (typeof wellnessService.getAIResponse === 'function') {
-        res = await wellnessService.getAIResponse('self_talk_detective', trimmedThought);
+        res = await wellnessService.getAIResponse(
+          'self_talk_detective',
+          trimmedThought
+        );
       } else if (typeof wellnessService.analyzeSelfTalk === 'function') {
         res = await wellnessService.analyzeSelfTalk(trimmedThought);
       } else {
@@ -42,7 +46,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
           } else {
             parsedResult = { analysis: rawData };
           }
-        } catch (_) {
+        } catch {
           parsedResult = { analysis: rawData };
         }
       } else if (typeof rawData === 'object' && rawData !== null) {
@@ -50,9 +54,26 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
       }
 
       const finalAnalysis = {
-        distortion: parsedResult.distortion || parsedResult.category || parsedResult.pattern || 'Self-Talk Pattern Identified',
-        analysis: parsedResult.analysis || parsedResult.details || parsedResult.explanation || (typeof rawData === 'string' ? rawData : 'Analysis generated.'),
-        reframed_thought: parsedResult.reframed_thought || parsedResult.improvement || parsedResult.reframe || parsedResult.positive_reframe || null,
+        distortion:
+          parsedResult.distortion ||
+          parsedResult.category ||
+          parsedResult.pattern ||
+          'Self-Talk Pattern Identified',
+
+        analysis:
+          parsedResult.analysis ||
+          parsedResult.details ||
+          parsedResult.explanation ||
+          (typeof rawData === 'string'
+            ? rawData
+            : 'Analysis generated.'),
+
+        reframed_thought:
+          parsedResult.reframed_thought ||
+          parsedResult.improvement ||
+          parsedResult.reframe ||
+          parsedResult.positive_reframe ||
+          null,
       };
 
       setAnalysisResult(finalAnalysis);
@@ -61,6 +82,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
       if (onProgress) onProgress(80, 1);
     } catch (err) {
       console.error('Analysis error:', err);
+
       setError(
         err?.response?.data?.message ||
         err?.message ||
@@ -73,7 +95,9 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
 
   const handleClaimAndFinish = () => {
     setIsFinished(true);
+
     if (onProgress) onProgress(100, 1);
+
     if (onComplete) {
       onComplete(
         100,
@@ -96,6 +120,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
         <h3 className="text-lg font-black text-slate-800">
           🕵️‍♂️ Self-Talk Detective
         </h3>
+
         <p className="text-xs text-slate-500">
           Identify cognitive distortions, reframe negative thoughts, and improve self-talk.
         </p>
@@ -109,6 +134,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
               <label className="block text-xs font-bold text-slate-600 mb-1">
                 What unhelpful or negative thought are you having?
               </label>
+
               <textarea
                 value={negativeThought}
                 onChange={(e) => setNegativeThought(e.target.value)}
@@ -122,7 +148,14 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
             {error && (
               <div className="text-xs text-rose-500 font-semibold text-left p-3 rounded-xl bg-rose-50 border border-rose-100 flex justify-between items-center">
                 <span>⚠️ {error}</span>
-                <button type="button" onClick={() => setError(null)} className="text-rose-400 font-bold ml-2">✕</button>
+
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="text-rose-400 font-bold ml-2"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
@@ -131,7 +164,9 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
               disabled={loading || isSubmitting || !negativeThought.trim()}
               className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-all"
             >
-              {loading ? '⏳ Groq AI Analyzing Thought...' : '🔍 Analyze Self-Talk'}
+              {loading
+                ? '⏳ Groq AI Analyzing Thought...'
+                : '🔍 Analyze Self-Talk'}
             </button>
           </form>
         ) : (
@@ -141,6 +176,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
               <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
                 Detective Report
               </span>
+
               <span className="text-lg">🔎</span>
             </div>
 
@@ -149,6 +185,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
               <div className="text-[10px] uppercase font-bold text-slate-400">
                 Target Thought
               </div>
+
               <p className="text-xs italic text-slate-700 bg-white p-2.5 rounded-xl border border-indigo-50">
                 "{negativeThought}"
               </p>
@@ -160,6 +197,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
                 <div className="text-[10px] uppercase font-bold text-slate-400">
                   Detected Pattern
                 </div>
+
                 <div className="inline-block rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
                   {analysisResult.distortion}
                 </div>
@@ -172,6 +210,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
                 <div className="text-[10px] uppercase font-bold text-slate-400">
                   AI Analysis
                 </div>
+
                 <div className="bg-white p-3 rounded-xl border border-indigo-50 prose prose-xs max-w-none text-slate-700 prose-headings:font-bold prose-ul:list-disc prose-ul:pl-4">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {analysisResult.analysis}
@@ -186,6 +225,7 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
                 <div className="text-[10px] uppercase font-bold text-emerald-600">
                   Empowered Reframe
                 </div>
+
                 <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-xs font-semibold text-emerald-900 prose prose-xs max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {analysisResult.reframed_thought}
@@ -202,8 +242,11 @@ export const SelfTalkDetectiveActivity = ({ onProgress, onComplete, isSubmitting
                 disabled={isSubmitting || isFinished}
                 className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50 transition-colors"
               >
-                {isFinished ? '✓ Completed' : '✓ Accept Reframe & Complete'}
+                {isFinished
+                  ? '✓ Completed'
+                  : '✓ Accept Reframe & Complete'}
               </button>
+
               <button
                 type="button"
                 onClick={handleReset}

@@ -1,38 +1,60 @@
+from django.utils import timezone
+
+from rest_framework import status
 from rest_framework.decorators import (
     api_view,
     permission_classes,
 )
-
 from rest_framework.permissions import IsAuthenticated
-
 from rest_framework.response import Response
 
-from rest_framework import status
+from apps.gamification.service import award_xp
+from apps.notifications.services import (
+    create_wellness_notification,
+)
+from apps.wellness.models import (
+    CodexCategory,
+    CodexLesson,
+    UserLessonProgress,
+)
 
 from .serializers import (
     CodexCategorySerializer,
     CodexLessonSerializer,
-    UserLessonProgressSerializer,
 )
 
-from .services import (
-    get_categories,
-    get_lesson_by_id,
-    get_lesson_progress,
-    start_lesson,
-    update_lesson_progress,
-    complete_lesson,
-)
+
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    """
+    Create a Wellness notification.
+    """
+
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def codex_categories(request):
+def codex_categories_view(request):
     """
-    Return Codex categories and lessons.
+    Return all active Codex categories
+    with their active lessons.
     """
 
-    categories = get_categories()
+    categories = (
+        CodexCategory.objects
+        .filter(is_active=True)
+        .prefetch_related("lessons")
+    )
 
     serializer = CodexCategorySerializer(
         categories,
@@ -50,16 +72,21 @@ def codex_categories(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def codex_lesson_detail(request, lesson_id):
+def codex_lesson_detail_view(
+    request,
+    lesson_id,
+):
     """
-    Return a single Codex lesson.
+    Return a single active Codex lesson.
     """
 
-    lesson = get_lesson_by_id(
-        lesson_id
-    )
+    try:
+        lesson = CodexLesson.objects.get(
+            id=lesson_id,
+            is_active=True,
+        )
 
-    if not lesson:
+    except CodexLesson.DoesNotExist:
         return Response(
             {
                 "success": False,
@@ -83,69 +110,21 @@ def codex_lesson_detail(request, lesson_id):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def codex_start_lesson(request, lesson_id):
-    """
-    Start a Codex lesson.
-    """
-
-    lesson = get_lesson_by_id(
-        lesson_id
-    )
-
-    if not lesson:
-        return Response(
-            {
-                "success": False,
-                "message": "Lesson not found.",
-            },
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    try:
-
-        progress = start_lesson(
-            request.user,
-            lesson,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    serializer = UserLessonProgressSerializer(
-        progress
-    )
-
-    return Response(
-        {
-            "success": True,
-            "message": "Lesson started.",
-            "progress": serializer.data,
-        }
-    )
-
-
-@api_view(["PATCH"])
-@permission_classes([IsAuthenticated])
-def codex_update_progress(
+def codex_lesson_start_view(
     request,
     lesson_id,
 ):
     """
-    Update lesson progress.
+    Start a Codex lesson for the authenticated user.
     """
 
-    lesson = get_lesson_by_id(
-        lesson_id
-    )
+    try:
+        lesson = CodexLesson.objects.get(
+            id=lesson_id,
+            is_active=True,
+        )
 
-    if not lesson:
+    except CodexLesson.DoesNotExist:
         return Response(
             {
                 "success": False,
@@ -154,64 +133,52 @@ def codex_update_progress(
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    progress_value = request.data.get(
-        "progress"
+    progress, _ = UserLessonProgress.objects.get_or_create(
+        user=request.user,
+        lesson=lesson,
+        defaults={
+            "status": "in_progress",
+            "started_at": timezone.now(),
+            "progress": 50,
+        },
     )
 
-    if progress_value is None:
-        return Response(
-            {
-                "success": False,
-                "message": "progress is required.",
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+    if progress.status == "available":
+        progress.status = "in_progress"
+        progress.started_at = timezone.now()
+        progress.save(
+            update_fields=[
+                "status",
+                "started_at",
+            ]
         )
-
-    try:
-
-        progress = update_lesson_progress(
-            request.user,
-            lesson,
-            progress_value,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    serializer = UserLessonProgressSerializer(
-        progress
-    )
 
     return Response(
         {
             "success": True,
-            "progress": serializer.data,
+            "status": progress.status,
+            "progress": progress.progress,
         }
     )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def codex_complete_lesson(
+def codex_lesson_complete_view(
     request,
     lesson_id,
 ):
     """
-    Complete a Codex lesson.
+    Complete a Codex lesson and award XP once.
     """
 
-    lesson = get_lesson_by_id(
-        lesson_id
-    )
+    try:
+        lesson = CodexLesson.objects.get(
+            id=lesson_id,
+            is_active=True,
+        )
 
-    if not lesson:
+    except CodexLesson.DoesNotExist:
         return Response(
             {
                 "success": False,
@@ -220,39 +187,56 @@ def codex_complete_lesson(
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    try:
-
-        result = complete_lesson(
-            request.user,
-            lesson,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    serializer = UserLessonProgressSerializer(
-        result["progress"]
+    progress, _ = UserLessonProgress.objects.get_or_create(
+        user=request.user,
+        lesson=lesson,
     )
+
+    already_completed = (
+        progress.status == "completed"
+    )
+
+    xp_awarded = 0
+
+    if not already_completed:
+        progress.status = "completed"
+        progress.progress = 100
+        progress.completed_at = timezone.now()
+
+        progress.save(
+            update_fields=[
+                "status",
+                "progress",
+                "completed_at",
+            ]
+        )
+
+        if lesson.xp_reward > 0:
+            award_xp(
+                request.user,
+                lesson.xp_reward,
+                "wellness_codex",
+                f"Completed lesson: {lesson.title}",
+            )
+
+            xp_awarded = lesson.xp_reward
+
+            notify_wellness_completion(
+                user=request.user,
+                title="Codex Lesson Completed!",
+                message=(
+                    f"You earned {xp_awarded} XP "
+                    f"for completing lesson: "
+                    f"{lesson.title}"
+                ),
+                action_url="/modules",
+            )
 
     return Response(
         {
             "success": True,
-            "message": (
-                "Lesson completed."
-                if not result["already_completed"]
-                else "Lesson was already completed."
-            ),
-            "already_completed": result[
-                "already_completed"
-            ],
-            "xp_awarded": result["xp_awarded"],
-            "progress": serializer.data,
+            "already_completed": already_completed,
+            "xp_awarded": xp_awarded,
+            "message": "Lesson marked as completed.",
         }
     )

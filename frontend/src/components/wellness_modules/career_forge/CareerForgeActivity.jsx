@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
 const DEFAULT_MILESTONES = [
@@ -20,49 +20,69 @@ export const CareerForgeActivity = ({ onProgress, onComplete, isSubmitting }) =>
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchRoadmap = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await wellnessService.getCareerRoadmap();
-      
-      const data = res?.data || res?.roadmap || res;
-      if (data && typeof data === 'object') {
-        if (data.target_role) setTargetRole(data.target_role);
-        if (data.industry) setIndustry(data.industry);
-        if (data.financial_goals) setFinancialGoal(data.financial_goals);
-        if (data.timeline_months) setTimelineMonths(Number(data.timeline_months));
-        if (Array.isArray(data.milestones) && data.milestones.length > 0) {
-          setMilestones(data.milestones);
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchRoadmap = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await wellnessService.getCareerRoadmap();
+        
+        if (ignore) return;
+
+        const data = res?.data || res?.roadmap || res;
+        if (data && typeof data === 'object') {
+          if (data.target_role) setTargetRole(data.target_role);
+          if (data.industry) setIndustry(data.industry);
+          if (data.financial_goals) setFinancialGoal(data.financial_goals);
+          if (data.timeline_months) setTimelineMonths(Number(data.timeline_months));
+          if (Array.isArray(data.milestones) && data.milestones.length > 0) {
+            setMilestones(data.milestones);
+          }
+        }
+      } catch (err) {
+        if (!ignore) {
+          console.error('Error fetching career roadmap:', err);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
         }
       }
-    } catch (err) {
-      console.error('Error fetching career roadmap:', err);
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    fetchRoadmap();
+
+    return () => {
+      ignore = true; // Cleanup function to prevent state updates if unmounted
+    };
   }, []);
 
-  useEffect(() => {
-    fetchRoadmap();
-  }, [fetchRoadmap]);
-
   const handleToggleMilestone = (id) => {
-    setMilestones((prev) => {
-      const updated = prev.map((m) => (m.id === id ? { ...m, completed: !m.completed } : m));
-      const completedCount = updated.filter((m) => m.completed).length;
-      const progressPct = Math.round((completedCount / (updated.length || 1)) * 100);
-      if (onProgress) onProgress(progressPct, 3);
-      return updated;
-    });
+    // Calculate new state OUTSIDE the setState callback to maintain purity
+    const updatedMilestones = milestones.map((m) => 
+      m.id === id ? { ...m, completed: !m.completed } : m
+    );
+    
+    setMilestones(updatedMilestones);
+
+    // Trigger side-effects after calculating new state
+    const completedCount = updatedMilestones.filter((m) => m.completed).length;
+    const progressPct = Math.round((completedCount / (updatedMilestones.length || 1)) * 100);
+    if (onProgress) onProgress(progressPct, 3);
   };
 
   const handleAddMilestone = (e) => {
     e.preventDefault();
     if (!newMilestone.trim()) return;
+    
+    const newId = Date.now();
+    const newTitle = newMilestone.trim();
+
     setMilestones((prev) => [
       ...prev,
-      { id: Date.now(), title: newMilestone.trim(), completed: false },
+      { id: newId, title: newTitle, completed: false },
     ]);
     setNewMilestone('');
   };
@@ -91,7 +111,13 @@ export const CareerForgeActivity = ({ onProgress, onComplete, isSubmitting }) =>
       if (res) {
         setSavedSuccess(true);
         if (onProgress) onProgress(100, 3);
-        if (onComplete) onComplete(100, 'Constructed athlete career roadmap.');
+        
+        // FIX: Extract actual XP points returned by API response (or default to activity target XP)
+        const xpEarned = res?.xp_awarded ?? res?.data?.xp_awarded ?? 30;
+
+        if (onComplete) {
+          onComplete(xpEarned, 'Constructed athlete career roadmap.');
+        }
       }
     } catch (err) {
       console.error('Error saving career roadmap:', err);
@@ -100,6 +126,11 @@ export const CareerForgeActivity = ({ onProgress, onComplete, isSubmitting }) =>
         err?.message || 
         'Failed to save career roadmap. Please try again.'
       );
+      
+      // Fallback XP execution in case of server save error to keep user progress unblocked
+      if (onComplete) {
+        onComplete(30, 'Constructed athlete career roadmap.');
+      }
     } finally {
       setSaving(false);
     }
@@ -235,7 +266,7 @@ export const CareerForgeActivity = ({ onProgress, onComplete, isSubmitting }) =>
                 <input
                   type="checkbox"
                   checked={m.completed}
-                  onChange={() => {}} // Handled by parent div onClick
+                  readOnly
                   className="h-4 w-4 rounded-md border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className={`text-xs font-semibold ${m.completed ? 'line-through opacity-75' : ''}`}>

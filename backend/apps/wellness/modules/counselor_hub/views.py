@@ -1,126 +1,69 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-
 from rest_framework.response import Response
 
-from rest_framework import status
+from apps.wellness.models import (
+    Counselor,
+    CounselorRequest,
+)
 
-from .serializers import (
-    CounselorSerializer,
+from apps.wellness.modules.counselor_hub.serializers import (
     CounselorRequestSerializer,
-    CounselorRequestCreateSerializer,
-)
-
-from .services import (
-    get_counselors,
-    get_counselor,
-    create_request,
-    get_user_requests,
-    cancel_request,
+    CounselorSerializer,
 )
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def counselor_hub_info(request):
+def counselor_list_view(request):
+    """
+    Returns available counselors.
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Counselor Hub",
-            "description": (
-                "Find a counselor and request "
-                "professional support."
-            ),
-        },
-        "request_types": [
-            "appointment",
-            "callback",
-            "contact",
-        ],
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def counselor_list(request):
+    Optional query parameter:
+        ?specialization=...
+    """
 
     specialization = request.query_params.get(
         "specialization"
     )
 
-    available_param = request.query_params.get(
-        "available"
+    counselors = Counselor.objects.filter(
+        is_available=True
     )
 
-    available = None
-
-    if available_param == "true":
-        available = True
-
-    elif available_param == "false":
-        available = False
-
-    counselors = get_counselors(
-        specialization=specialization,
-        available=available,
-    )
-
-    return Response({
-        "success": True,
-        "count": counselors.count(),
-        "counselors": CounselorSerializer(
-            counselors,
-            many=True,
-        ).data,
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def counselor_detail(
-    request,
-    counselor_id,
-):
-
-    counselor = get_counselor(
-        counselor_id
-    )
-
-    if not counselor:
-
-        return Response(
-            {
-                "success": False,
-                "message": "Counselor not found.",
-            },
-            status=status.HTTP_404_NOT_FOUND,
+    if specialization:
+        counselors = counselors.filter(
+            specialization=specialization
         )
 
-    return Response({
-        "success": True,
-        "counselor": CounselorSerializer(
-            counselor
-        ).data,
-    })
+    serializer = CounselorSerializer(
+        counselors,
+        many=True,
+    )
+
+    return Response(
+        {
+            "success": True,
+            "counselors": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def create_counselor_request(
-    request,
-):
+def counselor_request_create_view(request):
+    """
+    Creates a counselor request for the
+    authenticated user.
+    """
 
-    serializer = CounselorRequestCreateSerializer(
+    serializer = CounselorRequestSerializer(
         data=request.data
     )
 
     if not serializer.is_valid():
-
         return Response(
             {
                 "success": False,
@@ -129,46 +72,34 @@ def create_counselor_request(
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
+    counselor = serializer.validated_data.get(
+        "counselor"
+    )
 
-        request_obj = create_request(
-            user=request.user,
-            counselor_id=serializer.validated_data[
-                "counselor_id"
-            ],
-            request_type=serializer.validated_data[
-                "request_type"
-            ],
-            message=serializer.validated_data.get(
-                "message",
-                "",
-            ),
-            preferred_date=serializer.validated_data.get(
-                "preferred_date"
-            ),
-            preferred_time=serializer.validated_data.get(
-                "preferred_time"
-            ),
-        )
-
-    except ValueError as error:
-
+    if counselor and not counselor.is_available:
         return Response(
             {
                 "success": False,
-                "message": str(error),
+                "message": (
+                    "This counselor is currently unavailable."
+                ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    req = serializer.save(
+        user=request.user
+    )
 
     return Response(
         {
             "success": True,
             "message": (
-                "Support request submitted."
+                "Counselor request submitted. "
+                "The team will follow up shortly."
             ),
             "request": CounselorRequestSerializer(
-                request_obj
+                req
             ).data,
         },
         status=status.HTTP_201_CREATED,
@@ -177,49 +108,27 @@ def create_counselor_request(
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def counselor_request_history(request):
+def counselor_my_requests_view(request):
+    """
+    Returns counselor requests belonging
+    to the authenticated user.
+    """
 
-    requests = get_user_requests(
-        request.user
+    requests = (
+        CounselorRequest.objects
+        .filter(user=request.user)
+        .order_by("-created_at")
     )
 
-    return Response({
-        "success": True,
-        "requests": CounselorRequestSerializer(
-            requests,
-            many=True,
-        ).data,
-    })
+    serializer = CounselorRequestSerializer(
+        requests,
+        many=True,
+    )
 
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def cancel_counselor_request(
-    request,
-    request_id,
-):
-
-    try:
-
-        request_obj = cancel_request(
-            user=request.user,
-            request_id=request_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Request cancelled.",
-        "request": CounselorRequestSerializer(
-            request_obj
-        ).data,
-    })
+    return Response(
+        {
+            "success": True,
+            "requests": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )

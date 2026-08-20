@@ -1,36 +1,21 @@
 from django.urls import path
 
 from .views import (
-    mindful_monsters_intro,
-    mindful_monsters_start,
-    mindful_monsters_update,
-    mindful_monsters_complete,
+    mindful_monsters_steps_view,
+    mindful_monsters_record_view,
 )
 
 
 urlpatterns = [
-
     path(
-        "",
-        mindful_monsters_intro,
-        name="mindful-monsters-intro",
+        "steps/",
+        mindful_monsters_steps_view,
+        name="mindful-monsters-steps",
     ),
 
     path(
-        "start/",
-        mindful_monsters_start,
-        name="mindful-monsters-start",
-    ),
-
-    path(
-        "session/<int:session_id>/",
-        mindful_monsters_update,
-        name="mindful-monsters-update",
-    ),
-
-    path(
-        "session/<int:session_id>/complete/",
-        mindful_monsters_complete,
-        name="mindful-monsters-complete",
+        "record/",
+        mindful_monsters_record_view,
+        name="mindful-monsters-record",
     ),
 ]

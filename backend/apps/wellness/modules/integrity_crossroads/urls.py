@@ -1,9 +1,21 @@
 from django.urls import path
 
-from .views import integrity_crossroads_info, integrity_crossroads_start, integrity_crossroads_complete
+from .views import (
+    integrity_scenarios_view,
+    integrity_submit_view,
+)
+
 
 urlpatterns = [
-    path("", integrity_crossroads_info, name="integrity-crossroads-info"),
-    path("start/", integrity_crossroads_start, name="integrity-crossroads-start"),
-    path("complete/", integrity_crossroads_complete, name="integrity-crossroads-complete"),
+    path(
+        "scenarios/",
+        integrity_scenarios_view,
+        name="integrity-crossroads-scenarios",
+    ),
+
+    path(
+        "submit/",
+        integrity_submit_view,
+        name="integrity-crossroads-submit",
+    ),
 ]

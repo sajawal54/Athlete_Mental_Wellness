@@ -1,219 +1,140 @@
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
-
-from rest_framework.permissions import IsAuthenticated
-
-from rest_framework.response import Response
+from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from .serializers import (
+from apps.wellness.models import GritGardenSession
+
+from apps.wellness.modules.grit_garden.serializers import (
     GritGardenSessionSerializer,
-    GritGardenCreateSerializer,
 )
 
-from .services import (
-    create_session,
-    autosave_session,
-    get_history,
-    complete_session,
+from apps.wellness.services import (
+    complete_module,
+    get_module_by_slug,
+)
+
+from apps.notifications.services import (
+    create_wellness_notification,
 )
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def grit_garden_info(request):
+def notify_wellness_completion(
+    user,
+    title,
+    message,
+    action_url="/modules",
+):
+    """
+    Creates a Wellness notification for the user.
+    """
 
-    return Response({
-        "success": True,
-        "module": {
-            "name": "Grit Garden",
-            "description": (
-                "A reflection and stress-release "
-                "space for building resilience."
-            ),
-        },
-        "exercises": [
-            {
-                "type": "reflection",
-                "title": "Daily Reflection",
-                "description": (
-                    "Reflect on a challenge "
-                    "and what you learned."
-                ),
-            },
-            {
-                "type": "stress_release",
-                "title": "Stress Release",
-                "description": (
-                    "Write down what is "
-                    "causing pressure and release it."
-                ),
-            },
-            {
-                "type": "gratitude",
-                "title": "Gratitude",
-                "description": (
-                    "Write about something "
-                    "positive from today."
-                ),
-            },
-        ],
-    })
+    return create_wellness_notification(
+        user=user,
+        title=title,
+        message=message,
+        action_url=action_url,
+    )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def create_grit_session(request):
+def grit_garden_save_view(request):
+    """
+    Saves a Grit Garden reflection and completes
+    the Grit Garden module.
+    """
 
-    serializer = GritGardenCreateSerializer(
-        data=request.data
+    exercise_type = request.data.get(
+        "exercise_type",
+        "reflection",
     )
 
-    if not serializer.is_valid():
+    journal_text = request.data.get(
+        "journal_text",
+        "",
+    )
 
-        return Response(
-            {
-                "success": False,
-                "errors": serializer.errors,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    exercise_response = request.data.get(
+        "exercise_response",
+        "",
+    )
 
-    try:
+    session = GritGardenSession.objects.create(
+        user=request.user,
+        exercise_type=exercise_type,
+        journal_text=journal_text,
+        exercise_response=exercise_response,
+        status="completed",
+        completed_at=timezone.now(),
+    )
 
-        session = create_session(
+    module = get_module_by_slug(
+        "grit-garden"
+    )
+
+    xp_awarded = 0
+
+    if module:
+        result = complete_module(
             user=request.user,
-            exercise_type=serializer.validated_data[
-                "exercise_type"
-            ],
-            journal_text=serializer.validated_data.get(
-                "journal_text",
-                "",
-            ),
-            exercise_response=serializer.validated_data.get(
-                "exercise_response",
-                "",
-            ),
+            module=module,
+            session=None,
+            score=100,
         )
 
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+        xp_awarded = result.get(
+            "xp_awarded",
+            0,
         )
+
+        if xp_awarded > 0:
+            notify_wellness_completion(
+                user=request.user,
+                title="Grit Garden Reflection Saved!",
+                message=(
+                    f"You earned {xp_awarded} XP!"
+                ),
+                action_url="/modules",
+            )
 
     return Response(
         {
             "success": True,
-            "session": GritGardenSessionSerializer(
-                session
-            ).data,
+            "session_id": session.id,
+            "message": (
+                "Reflection saved to your Grit Garden."
+            ),
+            "xp_awarded": xp_awarded,
         },
         status=status.HTTP_201_CREATED,
     )
 
 
-@api_view(["PATCH"])
-@permission_classes([IsAuthenticated])
-def update_grit_session(
-    request,
-    session_id,
-):
-
-    try:
-
-        session = autosave_session(
-            user=request.user,
-            session_id=session_id,
-            journal_text=request.data.get(
-                "journal_text"
-            ),
-            exercise_response=request.data.get(
-                "exercise_response"
-            ),
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": "Progress saved.",
-        "session": GritGardenSessionSerializer(
-            session
-        ).data,
-    })
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def grit_garden_history(request):
+def grit_garden_history_view(request):
+    """
+    Returns the user's latest 10 Grit Garden reflections.
+    """
 
-    sessions = get_history(
-        request.user
+    sessions = (
+        GritGardenSession.objects
+        .filter(user=request.user)
+        .order_by("-created_at")[:10]
     )
 
-    return Response({
-        "success": True,
-        "history": GritGardenSessionSerializer(
-            sessions,
-            many=True,
-        ).data,
-    })
+    serializer = GritGardenSessionSerializer(
+        sessions,
+        many=True,
+    )
 
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def complete_grit_session(
-    request,
-    session_id,
-):
-
-    try:
-
-        result = complete_session(
-            user=request.user,
-            session_id=session_id,
-        )
-
-    except ValueError as error:
-
-        return Response(
-            {
-                "success": False,
-                "message": str(error),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    return Response({
-        "success": True,
-        "message": (
-            "Grit Garden completed."
-            if not result["already_completed"]
-            else "Session already completed."
-        ),
-        "already_completed": result[
-            "already_completed"
-        ],
-        "xp_awarded": result[
-            "xp_awarded"
-        ],
-        "session": GritGardenSessionSerializer(
-            result["session"]
-        ).data,
-    })
+    return Response(
+        {
+            "success": True,
+            "history": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )

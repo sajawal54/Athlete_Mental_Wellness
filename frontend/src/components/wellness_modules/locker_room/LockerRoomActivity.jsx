@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
 export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => {
@@ -11,7 +11,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
   const [error, setError] = useState(null);
 
   // Fallback Scenario (English) in case backend or AI API is unreachable
-  const defaultScenario = {
+  const defaultScenario = useMemo(() => ({
     id: 'ai_generated_1',
     title: 'Match-Day Tension',
     difficulty: 'High-Stakes',
@@ -23,13 +23,13 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       { text: 'Ignore the conflict entirely and hope they settle down on the field.' }
     ],
     correct_choice_index: 0
-  };
+  }), []);
 
   const fetchScenarios = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Step 1: Prompt AI to dynamically generate a new random sports leadership scenario in English
       const aiPrompt = `
         Generate a fresh, realistic sports locker room dilemma for a team captain/athlete in English.
@@ -50,6 +50,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       `;
 
       let groqRes = null;
+
       if (typeof wellnessService.getAIResponse === 'function') {
         groqRes = await wellnessService.getAIResponse('locker_room', aiPrompt);
       }
@@ -58,7 +59,10 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       let parsed = null;
 
       if (typeof rawData === 'string') {
-        const cleanJson = rawData.substring(rawData.indexOf('{'), rawData.lastIndexOf('}') + 1);
+        const cleanJson = rawData.substring(
+          rawData.indexOf('{'),
+          rawData.lastIndexOf('}') + 1
+        );
         parsed = JSON.parse(cleanJson);
       } else if (typeof rawData === 'object' && rawData !== null) {
         parsed = rawData;
@@ -70,6 +74,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       } else {
         // Fall back to server service or default scenario
         const res = await wellnessService.getLockerRoomScenarios();
+
         if (res?.success && res?.scenarios?.length > 0) {
           setScenarios(res.scenarios);
           setSelectedScenario(res.scenarios[0]);
@@ -85,10 +90,14 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [defaultScenario]);
 
   useEffect(() => {
-    fetchScenarios();
+    const timer = setTimeout(() => {
+      fetchScenarios();
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [fetchScenarios]);
 
   const handleSelectScenario = (sc) => {
@@ -97,8 +106,13 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
     setEvalResult(null);
   };
 
+  const activeScenario =
+    scenarios.find((scenario) => scenario.id === selectedScenario?.id) ||
+    selectedScenario ||
+    defaultScenario;
+
   const handleDecisionSubmit = async () => {
-    if (selectedChoiceIndex === null || !selectedScenario) {
+    if (selectedChoiceIndex === null || !activeScenario) {
       setError('Please select an action path.');
       return;
     }
@@ -107,26 +121,27 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       setSubmittingChoice(true);
       setError(null);
 
-      const chosenOption = selectedScenario.choices[selectedChoiceIndex]?.text;
+      const chosenOption = activeScenario.choices[selectedChoiceIndex]?.text;
 
       // Ask AI to evaluate the specific decision made by the athlete
       const evalPrompt = `
-        Scenario: "${selectedScenario.situation}"
+        Scenario: "${activeScenario.situation}"
         User Selected Option: "${chosenOption}"
-        Correct Option Index: ${selectedScenario.correct_choice_index ?? 0}
+        Correct Option Index: ${activeScenario.correct_choice_index ?? 0}
         User Selected Index: ${selectedChoiceIndex}
 
         Evaluate this decision in clear, concise English.
         Provide a concise evaluation (2 sentences max) explaining why this choice is effective or how it impacts the locker room environment.
         Return ONLY a JSON object:
         {
-          "score": ${selectedChoiceIndex === (selectedScenario.correct_choice_index ?? 0) ? 95 : 65},
-          "is_optimal": ${selectedChoiceIndex === (selectedScenario.correct_choice_index ?? 0)},
+          "score": ${selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0) ? 95 : 65},
+          "is_optimal": ${selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0)},
           "evaluation": "Clear short feedback explaining the leadership impact."
         }
       `;
 
       let evalRes = null;
+
       if (typeof wellnessService.getAIResponse === 'function') {
         evalRes = await wellnessService.getAIResponse('locker_room', evalPrompt);
       }
@@ -136,13 +151,17 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
 
       if (typeof rawEval === 'string') {
         try {
-          const cleanJson = rawEval.substring(rawEval.indexOf('{'), rawEval.lastIndexOf('}') + 1);
+          const cleanJson = rawEval.substring(
+            rawEval.indexOf('{'),
+            rawEval.lastIndexOf('}') + 1
+          );
           parsedEval = JSON.parse(cleanJson);
-        } catch (_) {
+        } catch {
           parsedEval = {
             score: selectedChoiceIndex === 0 ? 95 : 65,
             is_optimal: selectedChoiceIndex === 0,
-            evaluation: 'Your choice impacts overall team morale and focus before the game.'
+            evaluation:
+              'Your choice impacts overall team morale and focus before the game.'
           };
         }
       } else if (typeof rawEval === 'object' && rawEval !== null) {
@@ -151,20 +170,30 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
 
       const finalResult = {
         score: parsedEval.score || (selectedChoiceIndex === 0 ? 95 : 65),
-        is_optimal: parsedEval.is_optimal !== undefined ? parsedEval.is_optimal : (selectedChoiceIndex === 0),
-        evaluation: parsedEval.evaluation || 'A thoughtful leadership response that prioritizes team cohesion and mental focus.',
-        correctIndex: selectedScenario.correct_choice_index ?? 0
+        is_optimal:
+          parsedEval.is_optimal !== undefined
+            ? parsedEval.is_optimal
+            : selectedChoiceIndex === 0,
+        evaluation:
+          parsedEval.evaluation ||
+          'A thoughtful leadership response that prioritizes team cohesion and mental focus.',
+        correctIndex: activeScenario.correct_choice_index ?? 0
       };
 
       setEvalResult(finalResult);
-      if (onProgress) onProgress(80, 3);
+
+      if (onProgress) {
+        onProgress(80, 3);
+      }
     } catch (err) {
       console.error('Decision submission error:', err);
+
       setEvalResult({
         score: selectedChoiceIndex === 0 ? 95 : 70,
         is_optimal: selectedChoiceIndex === 0,
-        evaluation: 'This choice actively influences team dynamics and locker room atmosphere.',
-        correctIndex: selectedScenario.correct_choice_index ?? 0
+        evaluation:
+          'This choice actively influences team dynamics and locker room atmosphere.',
+        correctIndex: activeScenario.correct_choice_index ?? 0
       });
     } finally {
       setSubmittingChoice(false);
@@ -172,9 +201,15 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
   };
 
   const handleFinish = () => {
-    if (onProgress) onProgress(100, 3);
+    if (onProgress) {
+      onProgress(100, 3);
+    }
+
     if (onComplete) {
-      onComplete(evalResult?.score || 90, evalResult?.evaluation || 'Locker room scenario completed.');
+      onComplete(
+        evalResult?.score || 90,
+        evalResult?.evaluation || 'Locker room scenario completed.'
+      );
     }
   };
 
@@ -200,8 +235,9 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       {/* SCENARIO SELECTOR TABS & REFRESH */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          {selectedScenario?.title || 'Locker Room Activity'}
+          {activeScenario?.title || 'Locker Room Activity'}
         </span>
+
         <button
           type="button"
           onClick={fetchScenarios}
@@ -211,7 +247,27 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
         </button>
       </div>
 
-      {selectedScenario && (
+      {/* SCENARIO SELECTOR */}
+      {scenarios.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {scenarios.map((scenario) => (
+            <button
+              key={scenario.id}
+              type="button"
+              onClick={() => handleSelectScenario(scenario)}
+              className={`rounded-xl px-3 py-1.5 text-[10px] font-bold border transition ${
+                activeScenario?.id === scenario.id
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'
+              }`}
+            >
+              {scenario.title}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeScenario && (
         <div className="space-y-4 text-left">
           {/* SITUATION BRIEF */}
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-2">
@@ -219,15 +275,18 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
                 Locker Room Situation
               </span>
+
               <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
-                {selectedScenario.difficulty || 'Medium'}
+                {activeScenario.difficulty || 'Medium'}
               </span>
             </div>
+
             <p className="text-xs leading-relaxed text-slate-800 font-medium">
-              {selectedScenario.situation}
+              {activeScenario.situation}
             </p>
+
             <div className="text-xs font-extrabold text-indigo-950 pt-1">
-              ❓ {selectedScenario.question}
+              ❓ {activeScenario.question}
             </div>
           </div>
 
@@ -236,21 +295,28 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Select Your Action Path:
             </div>
-            {selectedScenario.choices?.map((choice, idx) => {
+
+            {activeScenario.choices?.map((choice, idx) => {
               const isSelected = selectedChoiceIndex === idx;
               const text = typeof choice === 'string' ? choice : choice.text;
-              const isCorrect = evalResult && idx === (selectedScenario.correct_choice_index ?? 0);
+              const isCorrect =
+                evalResult && idx === (activeScenario.correct_choice_index ?? 0);
               const isUserChoice = evalResult && isSelected;
 
-              let borderBgStyles = 'border-slate-200 bg-white hover:border-slate-300';
+              let borderBgStyles =
+                'border-slate-200 bg-white hover:border-slate-300';
+
               if (evalResult) {
                 if (isCorrect) {
-                  borderBgStyles = 'border-emerald-500 bg-emerald-50/80 shadow-2xs';
+                  borderBgStyles =
+                    'border-emerald-500 bg-emerald-50/80 shadow-2xs';
                 } else if (isUserChoice && !isCorrect) {
-                  borderBgStyles = 'border-rose-400 bg-rose-50/80 shadow-2xs';
+                  borderBgStyles =
+                    'border-rose-400 bg-rose-50/80 shadow-2xs';
                 }
               } else if (isSelected) {
-                borderBgStyles = 'border-indigo-600 bg-indigo-50/80 shadow-2xs';
+                borderBgStyles =
+                  'border-indigo-600 bg-indigo-50/80 shadow-2xs';
               }
 
               return (
@@ -272,10 +338,12 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
                   >
                     {String.fromCharCode(65 + idx)}
                   </span>
+
                   <div className="flex-1">
                     <span className="text-xs font-medium text-slate-800 leading-snug">
                       {text}
                     </span>
+
                     {evalResult && isCorrect && (
                       <span className="block text-[10px] font-bold text-emerald-700 mt-0.5">
                         ✓ Optimal Choice
@@ -293,10 +361,16 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
               <button
                 type="button"
                 onClick={handleDecisionSubmit}
-                disabled={submittingChoice || isSubmitting || selectedChoiceIndex === null}
+                disabled={
+                  submittingChoice ||
+                  isSubmitting ||
+                  selectedChoiceIndex === null
+                }
                 className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition"
               >
-                {submittingChoice ? 'Analyzing Decision Impact...' : 'Evaluate Decision & Claim XP →'}
+                {submittingChoice
+                  ? 'Analyzing Decision Impact...'
+                  : 'Evaluate Decision & Claim XP →'}
               </button>
             </div>
           )}
@@ -306,12 +380,16 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black text-slate-800">
-                  {evalResult.is_optimal ? '🎯 Optimal Leadership Choice' : '💡 Leadership Reflection'}
+                  {evalResult.is_optimal
+                    ? '🎯 Optimal Leadership Choice'
+                    : '💡 Leadership Reflection'}
                 </h3>
+
                 <span className="text-sm font-black text-indigo-700 font-mono">
                   Score: {evalResult.score}/100
                 </span>
               </div>
+
               <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-xl border border-indigo-100">
                 {evalResult.evaluation}
               </p>

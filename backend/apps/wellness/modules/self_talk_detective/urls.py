@@ -1,9 +1,21 @@
 from django.urls import path
 
-from .views import self_talk_detective_info, self_talk_detective_start, self_talk_detective_complete
+from .views import (
+    self_talk_analyze_view,
+    self_talk_history_view,
+)
+
 
 urlpatterns = [
-    path("", self_talk_detective_info, name="self-talk-detective-info"),
-    path("start/", self_talk_detective_start, name="self-talk-detective-start"),
-    path("complete/", self_talk_detective_complete, name="self-talk-detective-complete"),
+    path(
+        "analyze/",
+        self_talk_analyze_view,
+        name="self-talk-detective-analyze",
+    ),
+
+    path(
+        "history/",
+        self_talk_history_view,
+        name="self-talk-detective-history",
+    ),
 ]

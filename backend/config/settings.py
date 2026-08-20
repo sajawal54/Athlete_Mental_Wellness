@@ -25,6 +25,8 @@ INSTALLED_APPS = [
     "apps.accounts",
 "apps.moods",
 "apps.gamification",
+"apps.notifications",
+"apps.emergency_support",
 "apps.goals",
 "apps.affirmations",
 "apps.wellness",
@@ -97,7 +99,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
         # Add the options dictionary below
         'OPTIONS': {
-            'timeout': 20,  # Timeout in seconds
+            'timeout': 60,  # Timeout in seconds
         },
     }
 }

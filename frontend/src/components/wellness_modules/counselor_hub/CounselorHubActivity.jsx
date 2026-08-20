@@ -48,7 +48,7 @@ export const CounselorHubActivity = ({ onProgress, onComplete, isSubmitting }) =
       } else {
         setCounselors(FALLBACK_COUNSELORS);
       }
-    } catch (_) {
+    } catch {
       setCounselors(FALLBACK_COUNSELORS);
     }
   }, []);
@@ -57,9 +57,12 @@ export const CounselorHubActivity = ({ onProgress, onComplete, isSubmitting }) =
     try {
       const res = await wellnessService.getMyCounselorRequests();
       if (res?.success) setMyRequests(res.requests || []);
-    } catch (_) {}
+    } catch {
+      // Ignore request history fetch errors.
+    }
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchCounselors(); fetchMyRequests(); }, [fetchCounselors, fetchMyRequests]);
 
   const handleSelect = (counselor) => {
@@ -136,7 +139,7 @@ export const CounselorHubActivity = ({ onProgress, onComplete, isSubmitting }) =
           {counselors.map((c) => (
             <div key={c.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 hover:border-indigo-300 transition">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-2xl font-black text-indigo-600">
+                <div className="h-12 w-12 rounded-xl bg-linear-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-2xl font-black text-indigo-600">
                   {c.name.charAt(0)}
                 </div>
                 <div>

@@ -1,43 +1,35 @@
 from django.urls import path
 
 from .views import (
-    codex_categories,
-    codex_lesson_detail,
-    codex_start_lesson,
-    codex_update_progress,
-    codex_complete_lesson,
+    codex_categories_view,
+    codex_lesson_detail_view,
+    codex_lesson_start_view,
+    codex_lesson_complete_view,
 )
 
 
 urlpatterns = [
-
     path(
-        "",
-        codex_categories,
+        "categories/",
+        codex_categories_view,
         name="codex-categories",
     ),
 
     path(
         "lessons/<int:lesson_id>/",
-        codex_lesson_detail,
+        codex_lesson_detail_view,
         name="codex-lesson-detail",
     ),
 
     path(
         "lessons/<int:lesson_id>/start/",
-        codex_start_lesson,
-        name="codex-start-lesson",
-    ),
-
-    path(
-        "lessons/<int:lesson_id>/progress/",
-        codex_update_progress,
-        name="codex-update-progress",
+        codex_lesson_start_view,
+        name="codex-lesson-start",
     ),
 
     path(
         "lessons/<int:lesson_id>/complete/",
-        codex_complete_lesson,
-        name="codex-complete-lesson",
+        codex_lesson_complete_view,
+        name="codex-lesson-complete",
     ),
 ]

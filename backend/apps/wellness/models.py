@@ -135,13 +135,14 @@ class WellnessCompletion(models.Model):
         blank=True,
     )
     xp_awarded = models.PositiveIntegerField(default=0)
+    completion_date = models.DateField(auto_now_add=True)
     completed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "module"],
-                name="unique_wellness_completion",
+                fields=["user", "module", "completion_date"],
+                name="unique_daily_wellness_completion",
             )
         ]
 

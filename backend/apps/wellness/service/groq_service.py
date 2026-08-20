@@ -42,7 +42,10 @@ Provide feedback in simple Roman Urdu / Hinglish:
 1. Feedback: 1 short sentence validating their feelings.
 2. Prompts: 2 concise journaling questions to build grit.
 RULES:
-- Maximum 60 words total. Extremely short and clear."""
+- Maximum 60 words total. Extremely short and clear.""",
+
+
+
 }
 
 def generate_wellness_ai(module_type, user_input="", extra_context=""):

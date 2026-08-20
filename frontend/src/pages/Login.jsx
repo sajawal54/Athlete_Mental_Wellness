@@ -27,10 +27,28 @@ function Login() {
     },
   });
 
-  // Redirect if already authenticated
+  // Redirect already authenticated users according to their role
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/dashboard", { replace: true });
+      const storedUser = localStorage.getItem("user");
+
+      let user = null;
+
+      try {
+        user = storedUser ? JSON.parse(storedUser) : null;
+      } catch {
+        user = null;
+      }
+
+      if (user?.is_counselor === true) {
+        navigate("/counselor/dashboard", {
+          replace: true,
+        });
+      } else {
+        navigate("/dashboard", {
+          replace: true,
+        });
+      }
     }
   }, [isAuthenticated, navigate]);
 
@@ -56,7 +74,9 @@ function Login() {
     }
 
     if (payload?.email) {
-      return Array.isArray(payload.email) ? payload.email[0] : payload.email;
+      return Array.isArray(payload.email)
+        ? payload.email[0]
+        : payload.email;
     }
 
     if (payload?.password) {
@@ -73,7 +93,32 @@ function Login() {
 
     if (loginUserThunk.fulfilled.match(result)) {
       toast.success("Welcome Back!");
-      navigate("/dashboard");
+
+      /*
+       * loginUserThunk now stores the logged-in user.
+       *
+       * Counselor:
+       * is_counselor === true
+       *       ↓
+       * /counselor/dashboard
+       *
+       * Athlete:
+       * is_counselor === false
+       *       ↓
+       * /dashboard
+       */
+
+      const user = result.payload?.user;
+
+      if (user?.is_counselor === true) {
+        navigate("/counselor/dashboard", {
+          replace: true,
+        });
+      } else {
+        navigate("/dashboard", {
+          replace: true,
+        });
+      }
     } else {
       const errorMsg = getErrorMessage(result.payload);
       toast.error(errorMsg);
@@ -135,7 +180,8 @@ function Login() {
                   {...register("email", {
                     required: "Email is required",
                     pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                      value:
+                        /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                       message: "Invalid email address",
                     },
                   })}
