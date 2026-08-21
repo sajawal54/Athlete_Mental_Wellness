@@ -3,25 +3,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from django.utils import timezone
-
 from apps.wellness.models import IntegrityScenario, IntegritySession
-
-from apps.wellness.services import (
-    complete_module,
-    get_module_by_slug,
-)
-
-from apps.notifications.services import (
-    create_wellness_notification,
-)
+from apps.wellness.services import complete_module, get_module_by_slug
+from apps.notifications.services import create_wellness_notification
 
 from .serializers import IntegrityScenarioSerializer
 
-
-# =============================================================
-# WELLNESS NOTIFICATION HELPER
-# =============================================================
 
 def notify_wellness_completion(
     user,
@@ -35,11 +22,6 @@ def notify_wellness_completion(
         message=message,
         action_url=action_url,
     )
-
-
-# =============================================================
-# INTEGRITY CROSSROADS
-# =============================================================
 
 
 @api_view(["GET"])
@@ -86,7 +68,6 @@ def integrity_submit_view(request):
                 0,
             )
         )
-
     except (TypeError, ValueError):
         return Response(
             {
@@ -106,7 +87,6 @@ def integrity_submit_view(request):
             id=scenario_id,
             is_active=True,
         )
-
     except IntegrityScenario.DoesNotExist:
         return Response(
             {
@@ -117,10 +97,6 @@ def integrity_submit_view(request):
         )
 
     choices = scenario.choices or []
-
-    # ---------------------------------------------------------
-    # Validate selected choice
-    # ---------------------------------------------------------
 
     if (
         choice_index < 0
@@ -136,10 +112,6 @@ def integrity_submit_view(request):
 
     selected_choice = choices[choice_index]
 
-    # ---------------------------------------------------------
-    # Calculate score
-    # ---------------------------------------------------------
-
     score = selected_choice.get(
         "score",
         80,
@@ -150,21 +122,15 @@ def integrity_submit_view(request):
     except (TypeError, ValueError):
         score = 80
 
-    # Keep score inside a sensible range
-    score = max(0, min(score, 100))
-
-    # ---------------------------------------------------------
-    # Generate feedback
-    # ---------------------------------------------------------
+    score = max(
+        0,
+        min(score, 100),
+    )
 
     feedback = (
         selected_choice.get("values_reflection")
         or scenario.explanation
     )
-
-    # ---------------------------------------------------------
-    # Save session
-    # ---------------------------------------------------------
 
     session = IntegritySession.objects.create(
         user=request.user,
@@ -173,12 +139,7 @@ def integrity_submit_view(request):
         reflection=reflection,
         score=score,
         status="completed",
-        completed_at=timezone.now(),
     )
-
-    # ---------------------------------------------------------
-    # Complete Wellness Module
-    # ---------------------------------------------------------
 
     module = get_module_by_slug(
         "integrity-crossroads"
@@ -198,23 +159,13 @@ def integrity_submit_view(request):
             0,
         )
 
-        # -----------------------------------------------------
-        # Notification
-        # -----------------------------------------------------
-
         if xp_awarded > 0:
             notify_wellness_completion(
                 user=request.user,
                 title="Integrity Scenario Completed!",
-                message=(
-                    f"You earned {xp_awarded} XP!"
-                ),
+                message=f"You earned {xp_awarded} XP!",
                 action_url="/modules",
             )
-
-    # ---------------------------------------------------------
-    # Response
-    # ---------------------------------------------------------
 
     return Response(
         {

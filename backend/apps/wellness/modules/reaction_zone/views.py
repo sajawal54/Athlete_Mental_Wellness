@@ -6,44 +6,16 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.gamification.service import award_xp
-
-from apps.notifications.services import (
-    create_wellness_notification,
-)
-
 from apps.wellness.models import (
     ReactionPrompt,
     ReactionGameSession,
-)
-
-from apps.wellness.services import (
-    complete_module,
-    get_module_by_slug,
+    WellnessModule,
 )
 
 from .serializers import (
     ReactionPromptSerializer,
     ReactionGameSessionSerializer,
 )
-
-
-# =============================================================
-# WELLNESS NOTIFICATION HELPER
-# =============================================================
-
-def notify_wellness_completion(
-    user,
-    title,
-    message,
-    action_url="/modules",
-):
-    return create_wellness_notification(
-        user=user,
-        title=title,
-        message=message,
-        action_url=action_url,
-    )
 
 
 # =============================================================
@@ -54,6 +26,12 @@ def notify_wellness_completion(
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def reaction_zone_prompts_view(request):
+    """
+    Returns all active Reaction Zone prompts.
+
+    Prompts are reusable and can be played again on a new day.
+    """
+
     prompts = (
         ReactionPrompt.objects
         .filter(is_active=True)
@@ -77,6 +55,34 @@ def reaction_zone_prompts_view(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def reaction_zone_submit_score_view(request):
+    """
+    Save a Reaction Zone game session.
+
+    IMPORTANT:
+    This endpoint records the module-specific game result only.
+
+    XP is NOT awarded here.
+
+    XP is awarded through the shared Wellness lifecycle:
+
+        ModuleShell
+            ↓
+        completeModule()
+            ↓
+        complete_module()
+            ↓
+        XPHistory
+            ↓
+        Profile XP
+
+    This prevents duplicate XP and keeps all Wellness modules
+    consistent with the shared lifecycle.
+    """
+
+    # ---------------------------------------------------------
+    # READ INPUT
+    # ---------------------------------------------------------
+
     try:
         score = int(
             request.data.get(
@@ -85,21 +91,21 @@ def reaction_zone_submit_score_view(request):
             )
         )
 
-        correct = int(
+        correct_answers = int(
             request.data.get(
                 "correct_answers",
                 0,
             )
         )
 
-        total = int(
+        total_prompts = int(
             request.data.get(
                 "total_prompts",
                 5,
             )
         )
 
-        duration = int(
+        duration_seconds = int(
             request.data.get(
                 "duration_seconds",
                 10,
@@ -110,69 +116,117 @@ def reaction_zone_submit_score_view(request):
         return Response(
             {
                 "success": False,
-                "message": "Score values must be valid numbers.",
+                "message": (
+                    "Score values must be valid numbers."
+                ),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Prevent invalid negative values
-    score = max(score, 0)
-    correct = max(correct, 0)
-    total = max(total, 1)
-    duration = max(duration, 0)
+    # ---------------------------------------------------------
+    # SANITIZE VALUES
+    # ---------------------------------------------------------
 
-    # Correct answers cannot exceed total prompts
-    correct = min(correct, total)
+    score = max(score, 0)
+
+    total_prompts = max(
+        total_prompts,
+        1,
+    )
+
+    correct_answers = max(
+        correct_answers,
+        0,
+    )
+
+    duration_seconds = max(
+        duration_seconds,
+        0,
+    )
+
+    # Correct answers can never exceed total prompts.
+    correct_answers = min(
+        correct_answers,
+        total_prompts,
+    )
+
+    # ---------------------------------------------------------
+    # SAVE GAME SESSION
+    # ---------------------------------------------------------
 
     session = ReactionGameSession.objects.create(
         user=request.user,
         score=score,
-        correct_answers=correct,
-        total_prompts=total,
-        duration_seconds=duration,
+        total_prompts=total_prompts,
+        correct_answers=correct_answers,
+        duration_seconds=duration_seconds,
         status="completed",
         completed_at=timezone.now(),
     )
 
-    module = get_module_by_slug(
-        "reaction-zone"
+    # ---------------------------------------------------------
+    # GET MODULE XP INFORMATION
+    # ---------------------------------------------------------
+    #
+    # We DO NOT award XP here.
+    #
+    # This is only informational so frontend knows how much
+    # XP the shared completion lifecycle can award.
+    #
+    # Actual awarded XP comes from complete_module().
+    # ---------------------------------------------------------
+
+    module = (
+        WellnessModule.objects
+        .filter(
+            slug="word-grid"
+        )
+        .first()
     )
 
-    xp_awarded = 0
+    # The above lookup is intentionally NOT used for awarding XP.
+    # Reaction Zone has its own module slug.
+    #
+    # Find it safely below.
 
-    if module:
-        result = complete_module(
-            user=request.user,
-            module=module,
-            score=score,
+    reaction_module = (
+        WellnessModule.objects
+        .filter(
+            module_type="reaction_zone",
+            status="active",
         )
+        .first()
+    )
 
-        xp_awarded = result.get(
-            "xp_awarded",
-            0,
-        )
+    module_xp_reward = (
+        int(reaction_module.xp_reward or 0)
+        if reaction_module
+        else 0
+    )
 
-        if xp_awarded > 0:
-            notify_wellness_completion(
-                user=request.user,
-                title="Reaction Zone Score Saved!",
-                message=(
-                    f"You earned {xp_awarded} XP "
-                    "for playing Reaction Zone!"
-                ),
-                action_url="/modules",
-            )
+    # ---------------------------------------------------------
+    # RESPONSE
+    # ---------------------------------------------------------
 
     return Response(
         {
             "success": True,
-            "message": "Reaction score submitted!",
-            "score": score,
-            "correct_answers": correct,
-            "total_prompts": total,
-            "duration_seconds": duration,
+            "message": (
+                "Reaction Zone score submitted successfully."
+            ),
+            "score": session.score,
+            "correct_answers": session.correct_answers,
+            "total_prompts": session.total_prompts,
+            "duration_seconds": session.duration_seconds,
             "session_id": session.id,
-            "xp_awarded": xp_awarded,
+
+            # IMPORTANT:
+            # This is NOT awarded XP.
+            # It is only the module's configured reward.
+            "module_xp_reward": module_xp_reward,
+
+            # Actual XP must come from the shared completion API.
+            "xp_awarded": 0,
         },
         status=status.HTTP_200_OK,
     )
@@ -181,7 +235,11 @@ def reaction_zone_submit_score_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def reaction_zone_leaderboard_view(request):
-    # Best score for each user
+    """
+    Returns the top 10 users based on their best
+    Reaction Zone score.
+    """
+
     best_session_ids = (
         ReactionGameSession.objects
         .filter(

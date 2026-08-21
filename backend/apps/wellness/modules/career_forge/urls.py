@@ -12,7 +12,6 @@ urlpatterns = [
         career_forge_roadmap_view,
         name="career-forge-roadmap",
     ),
-
     path(
         "save/",
         career_forge_save_view,

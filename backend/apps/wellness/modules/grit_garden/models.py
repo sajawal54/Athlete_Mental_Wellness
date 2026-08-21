@@ -1,5 +1,5 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 
 User = settings.AUTH_USER_MODEL
@@ -62,4 +62,7 @@ class GritGardenSession(models.Model):
         ordering = ["-updated_at"]
 
     def __str__(self):
-        return f"{self.user} - {self.exercise_type}"
+        return (
+            f"{self.user} - "
+            f"{self.exercise_type}"
+        )

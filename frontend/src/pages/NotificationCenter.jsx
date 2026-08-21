@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   BellIcon,
@@ -28,7 +29,6 @@ const FILTERS = [
   { value: "mood", label: "Mood" },
   { value: "streak", label: "Streak" },
   { value: "security", label: "Security" },
-  
 ];
 
 // ============================================================
@@ -63,6 +63,8 @@ const getTargetRoute = (notification) => {
     case "streak":
       return "/dashboard";
 
+    default:
+      return undefined;
   }
 };
 
@@ -160,6 +162,8 @@ const formatDate = (dateString) => {
 // ============================================================
 
 export default function NotificationCenter() {
+  const navigate = useNavigate();
+
   const [notifications, setNotifications] = useState([]);
 
   const [filter, setFilter] = useState("all");
@@ -305,7 +309,6 @@ export default function NotificationCenter() {
 
         setUnreadCount(safeCount);
 
-        // Immediately tell TopNav
         notifyTopNav(safeCount);
       } catch (err) {
         const message = handleApiError(err);
@@ -374,7 +377,6 @@ export default function NotificationCenter() {
 
         setUnreadCount(safeCount);
 
-        // Immediately sync TopNav
         notifyTopNav(safeCount);
       } catch (err) {
         if (!mounted) {
@@ -485,7 +487,6 @@ export default function NotificationCenter() {
         setUnreadCount(safeCount);
         notifyTopNav(safeCount);
       } else {
-        // Tell TopNav again after successful API call
         window.dispatchEvent(
           new CustomEvent(
             "notificationsUpdated",
@@ -697,7 +698,7 @@ export default function NotificationCenter() {
       getTargetRoute(notification);
 
     if (targetRoute) {
-      window.location.href = targetRoute;
+      navigate(targetRoute);
     }
   };
 

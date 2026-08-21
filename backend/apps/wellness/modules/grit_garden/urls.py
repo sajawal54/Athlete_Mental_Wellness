@@ -12,6 +12,7 @@ urlpatterns = [
         grit_garden_save_view,
         name="grit-garden-save",
     ),
+
     path(
         "history/",
         grit_garden_history_view,

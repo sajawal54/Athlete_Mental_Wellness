@@ -8,7 +8,7 @@ export const ReactionZoneActivity = ({
   onComplete,
   isSubmitting,
 }) => {
-  const [gameState, setGameState] = useState('idle'); // idle | waiting | ready | result
+  const [gameState, setGameState] = useState('idle');
   const [reactionTimes, setReactionTimes] = useState([]);
   const [round, setRound] = useState(1);
   const [falseStarts, setFalseStarts] = useState(0);
@@ -18,7 +18,12 @@ export const ReactionZoneActivity = ({
 
   const timeoutRef = useRef(null);
   const startTimeRef = useRef(0);
+
   const totalRounds = 5;
+
+  // =========================================================
+  // LEADERBOARD
+  // =========================================================
 
   const fetchLeaderboard = async () => {
     try {
@@ -28,7 +33,10 @@ export const ReactionZoneActivity = ({
         setLeaderboard(res.leaderboard || []);
       }
     } catch (err) {
-      console.error(err);
+      console.error(
+        'Failed to load Reaction Zone leaderboard:',
+        err
+      );
     }
   };
 
@@ -37,14 +45,18 @@ export const ReactionZoneActivity = ({
 
     const loadLeaderboard = async () => {
       try {
-        const res = await wellnessService.getReactionLeaderboard();
+        const res =
+          await wellnessService.getReactionLeaderboard();
 
         if (!cancelled && res?.success) {
           setLeaderboard(res.leaderboard || []);
         }
       } catch (err) {
         if (!cancelled) {
-          console.error(err);
+          console.error(
+            'Failed to load Reaction Zone leaderboard:',
+            err
+          );
         }
       }
     };
@@ -53,16 +65,28 @@ export const ReactionZoneActivity = ({
 
     return () => {
       cancelled = true;
-      clearTimeout(timeoutRef.current);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
     };
   }, []);
 
+  // =========================================================
+  // START ROUND
+  // =========================================================
+
   const startRound = () => {
+    if (isSubmitting) {
+      return;
+    }
+
     setGameState('waiting');
     setIsClickBlocked(false);
 
     // Random delay between 1.5s and 4.0s
-    const delay = Math.floor(Math.random() * 2500) + 1500;
+    const delay =
+      Math.floor(Math.random() * 2500) + 1500;
 
     timeoutRef.current = setTimeout(() => {
       setGameState('ready');
@@ -70,103 +94,195 @@ export const ReactionZoneActivity = ({
     }, delay);
   };
 
+  // =========================================================
+  // HANDLE GAME BOX CLICK
+  // =========================================================
+
   const handleBoxClick = () => {
-    if (isClickBlocked) return;
+    if (isClickBlocked || isSubmitting) {
+      return;
+    }
+
+    // -------------------------------------------------------
+    // Start first / next round
+    // -------------------------------------------------------
 
     if (gameState === 'idle') {
       startRound();
       return;
     }
 
+    // -------------------------------------------------------
+    // False start
+    // -------------------------------------------------------
+
     if (gameState === 'waiting') {
-      // False start!
-      clearTimeout(timeoutRef.current);
-      setFalseStarts((f) => f + 1);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      setFalseStarts((previous) => previous + 1);
       setGameState('idle');
       setIsClickBlocked(false);
-      alert('⚠️ Too early! Wait for the box to turn GREEN.');
+
+      alert(
+        '⚠️ Too early! Wait for the box to turn GREEN.'
+      );
+
       return;
     }
 
+    // -------------------------------------------------------
+    // Valid reaction
+    // -------------------------------------------------------
+
     if (gameState === 'ready') {
       const currentTime = getCurrentTime();
-      const diff = Math.round(currentTime - startTimeRef.current);
+
+      const diff = Math.round(
+        currentTime - startTimeRef.current
+      );
 
       setIsClickBlocked(true);
 
-      const updatedTimes = [...reactionTimes, diff];
+      const updatedTimes = [
+        ...reactionTimes,
+        diff,
+      ];
+
       setReactionTimes(updatedTimes);
 
-      const prog = Math.min(
+      const progress = Math.min(
         100,
-        Math.round((round / totalRounds) * 100)
+        Math.round(
+          (round / totalRounds) * 100
+        )
       );
 
       if (onProgress) {
-        onProgress(prog, 3);
+        onProgress(progress, 3);
       }
+
+      // -----------------------------------------------------
+      // More rounds remaining
+      // -----------------------------------------------------
 
       if (round < totalRounds) {
-        setRound((r) => r + 1);
-
-        // Allow the next round to be started
+        setRound((previous) => previous + 1);
         setIsClickBlocked(false);
         setGameState('idle');
-      } else {
-        // Game Finished
-        finishGame(updatedTimes);
+
+        return;
       }
+
+      // -----------------------------------------------------
+      // Game finished
+      // -----------------------------------------------------
+
+      finishGame(updatedTimes);
     }
   };
+
+  // =========================================================
+  // FINISH GAME
+  // =========================================================
 
   const finishGame = async (times) => {
     setGameState('result');
 
-    const avg = Math.round(
-      times.reduce((a, b) => a + b, 0) / times.length
-    );
+    const average =
+      times.length > 0
+        ? Math.round(
+            times.reduce(
+              (sum, time) => sum + time,
+              0
+            ) / times.length
+          )
+        : 0;
 
     const score = Math.max(
       100,
-      Math.round(1000 - avg - falseStarts * 50)
+      Math.round(
+        1000 -
+          average -
+          falseStarts * 50
+      )
     );
 
     try {
-      const res = await wellnessService.submitReactionScore(
-        score,
-        totalRounds,
-        totalRounds,
-        15
-      );
+      // -----------------------------------------------------
+      // IMPORTANT:
+      //
+      // This endpoint ONLY saves the Reaction Zone score.
+      // It does NOT award XP.
+      //
+      // XP is awarded by ModuleShell through completeModule().
+      // -----------------------------------------------------
 
-      if (res?.success) {
-        // FIX: Extract actual XP awarded from backend response or default to 25 XP
-        const xpEarned = res?.xp_awarded ?? 25;
+      const res =
+        await wellnessService.submitReactionScore(
+          score,
+          totalRounds,
+          totalRounds,
+          15
+        );
 
-        setScoreResult({ avg, score, xpEarned });
-
-        fetchLeaderboard();
-
-        if (onComplete) {
-          // FIX: Passing xpEarned as the first parameter so parent receives actual XP
-          onComplete(
-            xpEarned,
-            `Average reaction speed: ${avg}ms (Score: ${score})`
-          );
-        }
+      if (!res?.success) {
+        throw new Error(
+          res?.message ||
+            'Failed to submit Reaction Zone score.'
+        );
       }
-    } catch (err) {
-      console.error(err);
+
+      setScoreResult({
+        avg: average,
+        score,
+      });
+
+      await fetchLeaderboard();
+
+      // -----------------------------------------------------
+      // IMPORTANT:
+      //
+      // Pass SCORE here, NOT XP.
+      //
+      // ModuleShell receives this score and then calls
+      // completeModule() to award the module XP.
+      // -----------------------------------------------------
 
       if (onComplete) {
-        // Fallback XP in case of error
-        onComplete(25, `Average reaction speed: ${avg}ms (Score: ${score})`);
+        onComplete(
+          score,
+          `Average reaction speed: ${average}ms (Score: ${score})`
+        );
       }
+    } catch (err) {
+      console.error(
+        'Reaction Zone submission failed:',
+        err
+      );
+
+      // Do NOT give fake/fallback XP here.
+      //
+      // Previously this was:
+      //
+      // onComplete(25, ...)
+      //
+      // which incorrectly treated 25 XP as the score.
+      //
+      // We only report the game score if the parent wants
+      // to handle the error.
     }
   };
 
+  // =========================================================
+  // RESET GAME
+  // =========================================================
+
   const resetGame = () => {
-    clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
 
     setGameState('idle');
     setReactionTimes([]);
@@ -174,37 +290,50 @@ export const ReactionZoneActivity = ({
     setFalseStarts(0);
     setScoreResult(null);
     setIsClickBlocked(false);
+
     startTimeRef.current = 0;
   };
 
+  // =========================================================
+  // UI
+  // =========================================================
+
   return (
     <div className="space-y-6 text-center">
-      <div className="max-w-md mx-auto space-y-1">
+      <div className="mx-auto max-w-md space-y-1">
         <h3 className="text-lg font-black text-slate-800">
           Precision Reaction Test
         </h3>
 
         <p className="text-xs text-slate-500">
-          Round {round} of {totalRounds} • Tap the box as quickly as possible
-          when it turns GREEN.
+          Round {round} of {totalRounds} • Tap the
+          box as quickly as possible when it turns
+          GREEN.
         </p>
       </div>
 
-      {/* INTERACTIVE GAME BOX */}
+      {/* =====================================================
+          INTERACTIVE GAME BOX
+          ===================================================== */}
+
       {gameState !== 'result' ? (
         <div
           onClick={handleBoxClick}
-          className={`mx-auto flex h-60 w-full max-w-md cursor-pointer select-none flex-col items-center justify-center rounded-3xl p-6 transition-colors duration-150 shadow-md ${
+          className={`mx-auto flex h-60 w-full max-w-md cursor-pointer select-none flex-col items-center justify-center rounded-3xl p-6 shadow-md transition-colors duration-150 ${
             gameState === 'idle'
               ? 'bg-indigo-600 text-white hover:bg-indigo-700'
               : gameState === 'waiting'
-              ? 'bg-rose-500 text-white animate-pulse'
-              : 'bg-emerald-500 text-white scale-102'
+              ? 'animate-pulse bg-rose-500 text-white'
+              : 'scale-102 bg-emerald-500 text-white'
           }`}
         >
+          {/* IDLE */}
+
           {gameState === 'idle' && (
             <div className="space-y-2">
-              <div className="text-4xl">⚡</div>
+              <div className="text-4xl">
+                ⚡
+              </div>
 
               <div className="text-lg font-black">
                 {round === 1
@@ -218,9 +347,13 @@ export const ReactionZoneActivity = ({
             </div>
           )}
 
+          {/* WAITING */}
+
           {gameState === 'waiting' && (
             <div className="space-y-1">
-              <div className="text-4xl">🛑</div>
+              <div className="text-4xl">
+                🛑
+              </div>
 
               <div className="text-lg font-black uppercase tracking-wider">
                 WAIT FOR GREEN...
@@ -232,9 +365,13 @@ export const ReactionZoneActivity = ({
             </div>
           )}
 
+          {/* READY */}
+
           {gameState === 'ready' && (
             <div className="space-y-1">
-              <div className="text-5xl">⚡</div>
+              <div className="text-5xl">
+                ⚡
+              </div>
 
               <div className="text-2xl font-black uppercase tracking-widest">
                 TAP NOW!
@@ -243,31 +380,36 @@ export const ReactionZoneActivity = ({
           )}
         </div>
       ) : (
-        /* RESULT VIEW */
-        <div className="mx-auto max-w-md rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 space-y-4 shadow-sm animate-fadeIn">
-          <div className="text-4xl">⚡</div>
+        /* ===================================================
+           RESULT VIEW
+           =================================================== */
+
+        <div className="mx-auto max-w-md space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm animate-fadeIn">
+          <div className="text-4xl">
+            ⚡
+          </div>
 
           <h4 className="text-xl font-black text-slate-800">
             Test Complete!
           </h4>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white p-3 border border-emerald-100">
-              <div className="text-[10px] uppercase font-bold text-slate-500">
+            <div className="rounded-2xl border border-emerald-100 bg-white p-3">
+              <div className="text-[10px] font-bold uppercase text-slate-500">
                 Average Speed
               </div>
 
-              <div className="text-xl font-black text-emerald-700 font-mono">
+              <div className="font-mono text-xl font-black text-emerald-700">
                 {scoreResult?.avg} ms
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white p-3 border border-emerald-100">
-              <div className="text-[10px] uppercase font-bold text-slate-500">
+            <div className="rounded-2xl border border-emerald-100 bg-white p-3">
+              <div className="text-[10px] font-bold uppercase text-slate-500">
                 Total Score
               </div>
 
-              <div className="text-xl font-black text-indigo-700 font-mono">
+              <div className="font-mono text-xl font-black text-indigo-700">
                 {scoreResult?.score} pts
               </div>
             </div>
@@ -284,35 +426,43 @@ export const ReactionZoneActivity = ({
         </div>
       )}
 
-      {/* REACTION STATS */}
-      {reactionTimes.length > 0 && gameState !== 'result' && (
-        <div className="flex justify-center gap-2 text-xs font-mono text-slate-600">
-          {reactionTimes.map((t, idx) => (
-            <span
-              key={idx}
-              className="rounded-lg bg-slate-100 px-2 py-1"
-            >
-              R{idx + 1}: {t}ms
-            </span>
-          ))}
-        </div>
-      )}
+      {/* =====================================================
+          REACTION STATS
+          ===================================================== */}
 
-      {/* LEADERBOARD */}
+      {reactionTimes.length > 0 &&
+        gameState !== 'result' && (
+          <div className="flex justify-center gap-2 text-xs font-mono text-slate-600">
+            {reactionTimes.map((time, index) => (
+              <span
+                key={`${time}-${index}`}
+                className="rounded-lg bg-slate-100 px-2 py-1"
+              >
+                R{index + 1}: {time}ms
+              </span>
+            ))}
+          </div>
+        )}
+
+      {/* =====================================================
+          LEADERBOARD
+          ===================================================== */}
+
       {leaderboard.length > 0 && (
-        <div className="max-w-md mx-auto space-y-2 pt-4 border-t border-slate-100 text-left">
+        <div className="mx-auto max-w-md space-y-2 border-t border-slate-100 pt-4 text-left">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Top Reflex High Scores
           </h4>
 
-          <div className="space-y-1.5 max-h-36 overflow-y-auto">
-            {leaderboard.map((item, idx) => (
+          <div className="max-h-36 space-y-1.5 overflow-y-auto">
+            {leaderboard.map((item, index) => (
               <div
-                key={item.id || idx}
+                key={item.id || index}
                 className="flex items-center justify-between rounded-xl bg-slate-50 p-2 text-xs"
               >
                 <span className="font-semibold text-slate-700">
-                  #{idx + 1} {item.username || 'Athlete'}
+                  #{index + 1}{' '}
+                  {item.username || 'Athlete'}
                 </span>
 
                 <span className="font-mono font-bold text-indigo-700">

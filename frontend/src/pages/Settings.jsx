@@ -23,6 +23,78 @@ const DEFAULT_NOTIFICATION_PREFERENCES = {
   security_notifications: true,
 };
 
+// =========================================================
+// TOGGLE COMPONENT
+// Moved outside Settings only to fix
+// react-hooks/static-components lint error.
+// Logic and UI remain unchanged.
+// =========================================================
+
+const NotificationToggle = ({
+  settingKey,
+  label,
+  description,
+  notifications,
+  notificationsLoading,
+  savingPreference,
+  handleNotificationChange,
+}) => {
+  const enabled = notifications[settingKey];
+
+  const isSaving = savingPreference === settingKey;
+
+  return (
+    <div className="flex items-center justify-between gap-5 py-3">
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+          {label}
+        </p>
+
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          {description}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        disabled={
+          notificationsLoading ||
+          Boolean(savingPreference)
+        }
+        onClick={() =>
+          handleNotificationChange(settingKey)
+        }
+        aria-label={`Toggle ${label}`}
+        aria-pressed={enabled}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-all duration-200 focus:outline-none ${
+          notificationsLoading ||
+          Boolean(savingPreference)
+            ? "opacity-50 cursor-not-allowed"
+            : "cursor-pointer"
+        } ${
+          enabled
+            ? "bg-indigo-600"
+            : "bg-slate-300 dark:bg-slate-700"
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+            enabled
+              ? "translate-x-6"
+              : "translate-x-1"
+          }`}
+        />
+
+        {isSaving && (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          </span>
+        )}
+      </button>
+    </div>
+  );
+};
+
 export default function Settings() {
   const navigate = useNavigate();
 
@@ -279,71 +351,6 @@ export default function Settings() {
   };
 
   // =========================================================
-  // TOGGLE COMPONENT
-  // =========================================================
-
-  const NotificationToggle = ({
-    settingKey,
-    label,
-    description,
-  }) => {
-    const enabled = notifications[settingKey];
-
-    const isSaving = savingPreference === settingKey;
-
-    return (
-      <div className="flex items-center justify-between gap-5 py-3">
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-            {label}
-          </p>
-
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {description}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          disabled={
-            notificationsLoading ||
-            Boolean(savingPreference)
-          }
-          onClick={() =>
-            handleNotificationChange(settingKey)
-          }
-          aria-label={`Toggle ${label}`}
-          aria-pressed={enabled}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-all duration-200 focus:outline-none ${
-            notificationsLoading ||
-            Boolean(savingPreference)
-              ? "opacity-50 cursor-not-allowed"
-              : "cursor-pointer"
-          } ${
-            enabled
-              ? "bg-indigo-600"
-              : "bg-slate-300 dark:bg-slate-700"
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              enabled
-                ? "translate-x-6"
-                : "translate-x-1"
-            }`}
-          />
-
-          {isSaving && (
-            <span className="absolute inset-0 flex items-center justify-center">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-            </span>
-          )}
-        </button>
-      </div>
-    );
-  };
-
-  // =========================================================
   // RENDER
   // =========================================================
 
@@ -589,24 +596,48 @@ export default function Settings() {
                   settingKey="goal_reminders"
                   label="Daily Goal Reminders"
                   description="Receive reminders about unfinished daily goals."
+                  notifications={notifications}
+                  notificationsLoading={notificationsLoading}
+                  savingPreference={savingPreference}
+                  handleNotificationChange={
+                    handleNotificationChange
+                  }
                 />
 
                 <NotificationToggle
                   settingKey="wellness_updates"
                   label="Wellness Updates"
                   description="Receive updates and reminders related to wellness modules."
+                  notifications={notifications}
+                  notificationsLoading={notificationsLoading}
+                  savingPreference={savingPreference}
+                  handleNotificationChange={
+                    handleNotificationChange
+                  }
                 />
 
                 <NotificationToggle
                   settingKey="achievement_updates"
                   label="Achievements & Streaks"
                   description="Receive level-up, achievement, trophy, and streak notifications."
+                  notifications={notifications}
+                  notificationsLoading={notificationsLoading}
+                  savingPreference={savingPreference}
+                  handleNotificationChange={
+                    handleNotificationChange
+                  }
                 />
 
                 <NotificationToggle
                   settingKey="security_notifications"
                   label="Security Notifications"
                   description="Receive important account and security alerts."
+                  notifications={notifications}
+                  notificationsLoading={notificationsLoading}
+                  savingPreference={savingPreference}
+                  handleNotificationChange={
+                    handleNotificationChange
+                  }
                 />
 
               </div>

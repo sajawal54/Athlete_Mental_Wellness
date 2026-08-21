@@ -7,5 +7,5 @@ urlpatterns = [
     
     # Delete a specific mood log entry by ID
     path('moods/<int:pk>/', MoodLogDetailView.as_view(), name='mood-delete'),
-    path('moods/delete/ ' , MoodHistoryClearView.as_view() , name="delete-mood")
+    path('moods/delete/' , MoodHistoryClearView.as_view() , name="delete-mood")
 ]

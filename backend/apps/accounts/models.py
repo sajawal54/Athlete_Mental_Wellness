@@ -47,7 +47,7 @@ class Profile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def add_xp(self, amount):
-        """XP add karta hai aur level auto update karta hai (Every 100 XP = +1 Level)"""
+        """XP add karta hai aur level auto update karta hai (Every 100000 XP)"""
         self.xp += amount
         self.level = (self.xp // 100000) + 1
         self.save()

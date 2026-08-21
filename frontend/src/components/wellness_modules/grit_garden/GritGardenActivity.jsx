@@ -36,16 +36,22 @@ export const GritGardenActivity = ({
   const [exerciseType, setExerciseType] = useState('reflection');
   const [journalText, setJournalText] = useState('');
   const [exerciseResponse, setExerciseResponse] = useState('');
+
   const [loading, setLoading] = useState(false);
-  const [claimingXp, setClaimingXp] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
   const [aiFeedback, setAiFeedback] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
 
   const selectedExercise =
-    EXERCISE_TYPES.find((e) => e.value === exerciseType) ||
-    EXERCISE_TYPES[0];
+    EXERCISE_TYPES.find(
+      (exercise) => exercise.value === exerciseType
+    ) || EXERCISE_TYPES[0];
+
+  // ---------------------------------------------------------
+  // LOAD HISTORY
+  // ---------------------------------------------------------
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -54,23 +60,65 @@ export const GritGardenActivity = ({
       if (res?.success) {
         setHistory(res.history || res.data || []);
       }
-    } catch {
-      // Ignore history fetch errors.
+    } catch (error) {
+      console.warn(
+        'Grit Garden history could not be loaded.',
+        error
+      );
     }
   }, []);
 
   useEffect(() => {
     let isMounted = true;
-    fetchHistory();
+
+    const loadHistory = async () => {
+      try {
+        const res =
+          await wellnessService.getGritGardenHistory();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (res?.success) {
+          setHistory(res.history || res.data || []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.warn(
+            'Grit Garden history could not be loaded.',
+            error
+          );
+        }
+      }
+    };
+
+    loadHistory();
+
     return () => {
       isMounted = false;
     };
-  }, [fetchHistory]);
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e?.preventDefault();
+  // ---------------------------------------------------------
+  // SUBMIT REFLECTION
+  //
+  // This API call ONLY saves the Grit Garden activity
+  // and retrieves AI feedback.
+  //
+  // It does NOT claim XP.
+  // ---------------------------------------------------------
 
-    const text = journalText.trim() || exerciseResponse.trim();
+  const handleSubmit = async (event) => {
+    event?.preventDefault();
+
+    if (loading || isSubmitting) {
+      return;
+    }
+
+    const text =
+      journalText.trim() ||
+      exerciseResponse.trim();
 
     if (text.length < 15) {
       setError(
@@ -83,34 +131,48 @@ export const GritGardenActivity = ({
       setLoading(true);
       setError(null);
 
-      // Backend API call: Save entry and get AI Feedback
-      const res = await wellnessService.saveGritGardenEntry(
-        exerciseType,
-        journalText,
-        exerciseResponse
-      );
-
-      if (res?.success || res?.status === 200 || res?.aiFeedback) {
-        setSubmitted(true);
-
-        setAiFeedback(
-          res?.aiFeedback ||
-            res?.feedback ||
-            res?.data?.aiFeedback ||
-            null
+      const res =
+        await wellnessService.saveGritGardenEntry(
+          exerciseType,
+          journalText.trim(),
+          exerciseResponse.trim()
         );
 
-        fetchHistory();
-
-        if (onProgress) {
-          onProgress(100, 3);
-        }
-      } else {
+      if (
+        !res?.success &&
+        res?.status !== 200 &&
+        !res?.aiFeedback
+      ) {
         throw new Error(
-          res?.message || 'Could not save your reflection.'
+          res?.message ||
+            'Could not save your reflection.'
         );
       }
+
+      const feedback =
+        res?.aiFeedback ||
+        res?.feedback ||
+        res?.data?.aiFeedback ||
+        res?.data?.feedback ||
+        null;
+
+      setAiFeedback(feedback);
+      setSubmitted(true);
+
+      // Refresh history after successful save.
+      await fetchHistory();
+
+      // Activity is completed from the activity's perspective,
+      // but XP is NOT awarded here.
+      if (onProgress) {
+        await onProgress(100, 3);
+      }
     } catch (err) {
+      console.error(
+        'Grit Garden submission error:',
+        err
+      );
+
       setError(
         err.response?.data?.message ||
           err.message ||
@@ -121,106 +183,213 @@ export const GritGardenActivity = ({
     }
   };
 
+  // ---------------------------------------------------------
+  // COMPLETE MODULE / CLAIM XP
+  //
+  // IMPORTANT:
+  //
+  // This does NOT directly award XP.
+  //
+  // ModuleShell receives onComplete()
+  // and calls:
+  //
+  // completeModule()
+  //
+  // Backend then:
+  // UserModuleProgress -> completed
+  // XPHistory -> XP awarded
+  // ---------------------------------------------------------
+
   const handleClaimXP = async () => {
-    if (claimingXp || isSubmitting) return;
+    if (loading || isSubmitting || !submitted) {
+      return;
+    }
 
     try {
-      setClaimingXp(true);
+      setError(null);
+
+      // Ensure progress is persisted as 100 before completion.
+      if (onProgress) {
+        await onProgress(100, 3);
+      }
+
       if (onComplete) {
-        // Sync await so parent updates XP before unmounting/closing
         await onComplete(
           100,
-          `Completed ${exerciseType} entry in your Grit Garden.`
+          `Completed ${exerciseType.replace(
+            '_',
+            ' '
+          )} entry in your Grit Garden.`
         );
       }
     } catch (err) {
-      console.error("XP Claim error:", err);
-    } finally {
-      setClaimingXp(false);
+      console.error(
+        'Grit Garden completion error:',
+        err
+      );
+
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          'Could not complete the Grit Garden module. Please try again.'
+      );
     }
   };
 
-  const wordCount = (journalText + exerciseResponse)
+  // ---------------------------------------------------------
+  // START ANOTHER REFLECTION
+  //
+  // IMPORTANT:
+  //
+  // Do not reset the module progress here.
+  // This only resets the activity UI.
+  //
+  // ModuleShell remains responsible for final completion.
+  // ---------------------------------------------------------
+
+  const handleNewReflection = () => {
+    if (loading || isSubmitting) {
+      return;
+    }
+
+    setSubmitted(false);
+    setJournalText('');
+    setExerciseResponse('');
+    setAiFeedback(null);
+    setError(null);
+
+    // Do NOT call onProgress(0).
+    // The module may already have progress saved.
+  };
+
+  // ---------------------------------------------------------
+  // EXERCISE CHANGE
+  // ---------------------------------------------------------
+
+  const handleExerciseChange = (value) => {
+    if (submitted || loading || isSubmitting) {
+      return;
+    }
+
+    setExerciseType(value);
+    setJournalText('');
+    setExerciseResponse('');
+    setAiFeedback(null);
+    setError(null);
+  };
+
+  // ---------------------------------------------------------
+  // PROGRESS
+  // ---------------------------------------------------------
+
+  const handleTextChange = (value) => {
+    setJournalText(value);
+
+    if (!onProgress) {
+      return;
+    }
+
+    const length = value.trim().length;
+
+    const progress = Math.min(
+      80,
+      Math.round((length / 200) * 80)
+    );
+
+    onProgress(progress, 3);
+  };
+
+  const wordCount = (
+    `${journalText} ${exerciseResponse}`
+  )
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
 
-  const isBtnDisabled = loading || claimingXp || isSubmitting;
+  const isBusy =
+    loading || isSubmitting;
+
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
 
   return (
     <div className="space-y-6 text-left select-none">
+
+      {/* ERROR */}
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700 flex justify-between items-center">
+        <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
           <span>⚠️ {error}</span>
 
           <button
             type="button"
             onClick={() => setError(null)}
-            className="text-rose-400 font-bold"
+            className="font-bold text-rose-400"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* EXERCISE TYPE SELECTOR */}
-      <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
-        {EXERCISE_TYPES.map((ex) => (
+      {/* -----------------------------------------------------
+          EXERCISE TYPE SELECTOR
+          ----------------------------------------------------- */}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {EXERCISE_TYPES.map((exercise) => (
           <button
-            key={ex.value}
+            key={exercise.value}
             type="button"
-            disabled={submitted || isBtnDisabled}
-            onClick={() => {
-              setExerciseType(ex.value);
-              setJournalText('');
-              setExerciseResponse('');
-              setAiFeedback(null);
-            }}
+            disabled={submitted || isBusy}
+            onClick={() =>
+              handleExerciseChange(exercise.value)
+            }
             className={`rounded-2xl border-2 px-3 py-2.5 text-left text-xs font-bold transition ${
-              exerciseType === ex.value
+              exerciseType === exercise.value
                 ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50'
-            } disabled:cursor-default`}
+            } disabled:cursor-default disabled:opacity-60`}
           >
-            {ex.label}
+            {exercise.label}
           </button>
         ))}
       </div>
 
-      {/* WRITING AREA */}
+      {/* -----------------------------------------------------
+          WRITING AREA
+          ----------------------------------------------------- */}
+
       {!submitted ? (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 space-y-2">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          {/* PROMPT */}
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">
               Today's Prompt:
             </div>
 
-            <p className="text-sm text-slate-700 leading-relaxed">
+            <p className="text-sm leading-relaxed text-slate-700">
               {selectedExercise.prompt}
             </p>
           </div>
 
+          {/* TEXTAREA */}
           <textarea
             rows={7}
-            disabled={isBtnDisabled}
+            disabled={isBusy}
             value={journalText}
-            onChange={(e) => {
-              setJournalText(e.target.value);
-
-              if (onProgress) {
-                onProgress(
-                  Math.min(
-                    80,
-                    Math.round((e.target.value.length / 200) * 80)
-                  ),
-                  3
-                );
-              }
-            }}
-            placeholder={selectedExercise.placeholder}
-            className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition disabled:bg-slate-100"
+            onChange={(event) =>
+              handleTextChange(event.target.value)
+            }
+            placeholder={
+              selectedExercise.placeholder
+            }
+            className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100"
           />
 
+          {/* ACTION ROW */}
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-400">
               {wordCount} words
@@ -228,12 +397,16 @@ export const GritGardenActivity = ({
 
             <button
               type="submit"
-              disabled={isBtnDisabled || wordCount < 3}
-              className="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50 transition flex items-center gap-2 cursor-pointer"
+              disabled={
+                isBusy ||
+                wordCount < 3
+              }
+              className="flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <>
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+
                   🌱 AI Analyzing & Saving...
                 </>
               ) : (
@@ -243,10 +416,18 @@ export const GritGardenActivity = ({
           </div>
         </form>
       ) : (
-        /* SUBMITTED & BACKEND AI FEEDBACK CARD */
+
+        /* ---------------------------------------------------
+           SUBMITTED / FEEDBACK
+           --------------------------------------------------- */
+
         <div className="space-y-4">
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center space-y-4">
-            <div className="text-5xl">🌿</div>
+
+          <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+
+            <div className="text-5xl">
+              🌿
+            </div>
 
             <div>
               <h3 className="text-base font-black text-emerald-800">
@@ -258,30 +439,29 @@ export const GritGardenActivity = ({
               </p>
             </div>
 
-            {/* BACKEND AI FEEDBACK DISPLAY */}
+            {/* AI FEEDBACK */}
             {aiFeedback && (
-              <div className="rounded-2xl bg-white p-4 text-left border border-emerald-200 space-y-2 shadow-xs">
+              <div className="space-y-2 rounded-2xl border border-emerald-200 bg-white p-4 text-left shadow-sm">
                 <div className="flex items-center gap-1.5 text-xs font-black text-emerald-800">
-                  <span>🤖 AI Mental Coach Feedback:</span>
+                  <span>
+                    🤖 AI Mental Coach Feedback:
+                  </span>
                 </div>
 
-                <p className="text-xs text-slate-700 leading-relaxed italic whitespace-pre-line">
+                <p className="whitespace-pre-line text-xs italic leading-relaxed text-slate-700">
                   {aiFeedback}
                 </p>
               </div>
             )}
 
+            {/* COMPLETION ACTIONS */}
             <div className="flex flex-wrap justify-center gap-3 pt-2">
+
               <button
                 type="button"
-                disabled={isBtnDisabled}
-                onClick={() => {
-                  setSubmitted(false);
-                  setJournalText('');
-                  setExerciseResponse('');
-                  setAiFeedback(null);
-                }}
-                className="rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition cursor-pointer"
+                disabled={isBusy}
+                onClick={handleNewReflection}
+                className="cursor-pointer rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Add Another Reflection
               </button>
@@ -289,52 +469,62 @@ export const GritGardenActivity = ({
               <button
                 type="button"
                 onClick={handleClaimXP}
-                disabled={isBtnDisabled}
-                className="rounded-xl bg-emerald-700 px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer"
+                disabled={isBusy}
+                className="cursor-pointer rounded-xl bg-emerald-700 px-6 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {claimingXp || isSubmitting ? 'Processing Reward...' : '✓ Claim My XP Reward'}
+                {isSubmitting
+                  ? 'Processing Reward...'
+                  : '✓ Complete & Claim XP'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* HISTORY */}
+      {/* -----------------------------------------------------
+          HISTORY
+          ----------------------------------------------------- */}
+
       {history.length > 0 && (
         <div className="space-y-3">
+
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Your Garden Entries
           </h3>
 
           <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-            {history.map((item, idx) => (
+            {history.map((item, index) => (
               <div
-                key={item.id || idx}
-                className="rounded-2xl border border-slate-200 bg-white p-3 text-xs space-y-1"
+                key={item.id || index}
+                className="space-y-1 rounded-2xl border border-slate-200 bg-white p-3 text-xs"
               >
-                <div className="flex justify-between items-center">
-                  <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 capitalize">
-                    {item.exercise_type?.replace('_', ' ') ||
-                      exerciseType}
+                <div className="flex items-center justify-between">
+                  <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold capitalize text-emerald-700">
+                    {item.exercise_type?.replace(
+                      /_/g,
+                      ' '
+                    ) || exerciseType}
                   </span>
 
-                  {item.createdAt && (
+                  {(item.createdAt ||
+                    item.created_at) && (
                     <span className="text-[9px] text-slate-400">
                       {new Date(
-                        item.createdAt
+                        item.createdAt ||
+                          item.created_at
                       ).toLocaleDateString()}
                     </span>
                   )}
                 </div>
 
-                <p className="text-slate-600 line-clamp-2">
+                <p className="line-clamp-2 text-slate-600">
                   {item.journal_text ||
                     item.exercise_response ||
                     item.entry}
                 </p>
 
                 {item.ai_feedback && (
-                  <p className="text-[10px] text-emerald-700 italic border-l-2 border-emerald-300 pl-2 mt-1">
+                  <p className="mt-1 border-l-2 border-emerald-300 pl-2 text-[10px] italic text-emerald-700">
                     🤖 {item.ai_feedback}
                   </p>
                 )}

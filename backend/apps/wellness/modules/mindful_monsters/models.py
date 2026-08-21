@@ -1,5 +1,5 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 
 User = settings.AUTH_USER_MODEL
@@ -8,7 +8,7 @@ User = settings.AUTH_USER_MODEL
 class MindfulMonsterStep(models.Model):
 
     title = models.CharField(
-        max_length=150
+        max_length=150,
     )
 
     instruction = models.TextField()
@@ -25,15 +25,15 @@ class MindfulMonsterStep(models.Model):
     )
 
     duration_seconds = models.PositiveIntegerField(
-        default=5
+        default=5,
     )
 
     order = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     is_active = models.BooleanField(
-        default=True
+        default=True,
     )
 
     class Meta:
@@ -58,15 +58,15 @@ class MindfulMonsterSession(models.Model):
     )
 
     current_step = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     completed_steps = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     total_steps = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     status = models.CharField(
@@ -76,7 +76,7 @@ class MindfulMonsterSession(models.Model):
     )
 
     started_at = models.DateTimeField(
-        auto_now_add=True
+        auto_now_add=True,
     )
 
     completed_at = models.DateTimeField(
@@ -88,4 +88,6 @@ class MindfulMonsterSession(models.Model):
         ordering = ["-started_at"]
 
     def __str__(self):
-        return f"{self.user} - Mindful Monsters"
+        return (
+            f"{self.user} - Mindful Monsters"
+        )

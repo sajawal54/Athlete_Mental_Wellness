@@ -1,5 +1,3 @@
-from django.utils import timezone
-
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -7,39 +5,7 @@ from rest_framework.response import Response
 
 from apps.wellness.models import CareerRoadmap
 
-from apps.wellness.services import (
-    complete_module,
-    get_module_by_slug,
-)
-
-from apps.notifications.services import (
-    create_wellness_notification,
-)
-
 from .serializers import CareerRoadmapSerializer
-
-
-# =============================================================
-# WELLNESS NOTIFICATION HELPER
-# =============================================================
-
-def notify_wellness_completion(
-    user,
-    title,
-    message,
-    action_url="/modules",
-):
-    return create_wellness_notification(
-        user=user,
-        title=title,
-        message=message,
-        action_url=action_url,
-    )
-
-
-# =============================================================
-# CAREER FORGE
-# =============================================================
 
 
 @api_view(["GET"])
@@ -94,6 +60,11 @@ def career_forge_save_view(request):
         "",
     )
 
+    notes = request.data.get(
+        "notes",
+        "",
+    )
+
     try:
         timeline_months = int(
             request.data.get(
@@ -112,58 +83,47 @@ def career_forge_save_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    notes = request.data.get(
-        "notes",
-        "",
+    timeline_months = max(
+        timeline_months,
+        1,
     )
+
+    if not isinstance(transferable_skills, list):
+        return Response(
+            {
+                "success": False,
+                "message": (
+                    "transferable_skills must be a list."
+                ),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not isinstance(milestones, list):
+        return Response(
+            {
+                "success": False,
+                "message": "milestones must be a list.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     roadmap, created = (
         CareerRoadmap.objects.update_or_create(
             user=request.user,
             defaults={
-                "target_role": target_role,
-                "industry": industry,
+                "target_role": str(target_role),
+                "industry": str(industry),
                 "transferable_skills": transferable_skills,
                 "milestones": milestones,
-                "financial_goals": financial_goals,
+                "financial_goals": str(
+                    financial_goals or ""
+                ),
                 "timeline_months": timeline_months,
-                "notes": notes,
+                "notes": str(notes or ""),
             },
         )
     )
-
-    # ---------------------------------------------------------
-    # Complete Wellness Module
-    # ---------------------------------------------------------
-
-    module = get_module_by_slug(
-        "career-forge"
-    )
-
-    xp_awarded = 0
-
-    if module:
-        result = complete_module(
-            user=request.user,
-            module=module,
-            score=100,
-        )
-
-        xp_awarded = result.get(
-            "xp_awarded",
-            0,
-        )
-
-        if xp_awarded > 0:
-            notify_wellness_completion(
-                user=request.user,
-                title="Career Roadmap Updated!",
-                message=(
-                    f"You earned {xp_awarded} XP "
-                    "for saving your roadmap!"
-                ),
-                action_url="/modules",
-            )
 
     return Response(
         {
@@ -175,7 +135,8 @@ def career_forge_save_view(request):
             "roadmap": CareerRoadmapSerializer(
                 roadmap
             ).data,
-            "xp_awarded": xp_awarded,
+            "xp_awarded": 0,
+            "ready_for_module_completion": True,
         },
         status=status.HTTP_200_OK,
     )

@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .serializers import (
@@ -21,11 +21,9 @@ from .services import (
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def emergency_contacts_view(request):
-    """
-    Return active emergency contacts for the requested region.
-    """
+    """Return active emergency contacts for the requested region."""
 
     region = request.query_params.get("region")
 
@@ -45,11 +43,9 @@ def emergency_contacts_view(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def counselors_view(request):
-    """
-    Return active counselors.
-    """
+    """Return active counselors."""
 
     counselors = get_counselors()
 
@@ -67,11 +63,9 @@ def counselors_view(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def crisis_information_view(request):
-    """
-    Return active crisis information.
-    """
+    """Return active crisis information."""
 
     information = get_crisis_information()
 
@@ -89,11 +83,9 @@ def crisis_information_view(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def breathing_exercises_view(request):
-    """
-    Return active breathing exercises.
-    """
+    """Return active breathing exercises."""
 
     exercises = get_breathing_exercises()
 
@@ -113,9 +105,7 @@ def breathing_exercises_view(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def callback_request_create_view(request):
-    """
-    Create a counselor callback request.
-    """
+    """Create a counselor callback request."""
 
     serializer = CallbackRequestSerializer(
         data=request.data
@@ -165,9 +155,7 @@ def callback_request_create_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def callback_request_list_view(request):
-    """
-    Return callback requests belonging to the current user.
-    """
+    """Return callback requests belonging to the current user."""
 
     requests = get_user_callback_requests(
         request.user

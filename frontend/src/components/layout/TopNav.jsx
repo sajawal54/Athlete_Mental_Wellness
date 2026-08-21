@@ -183,7 +183,13 @@ export default function TopNav({ setSidebarOpen }) {
   };
 
   useEffect(() => {
-    fetchProfile();
+    const timer = setTimeout(() => {
+      fetchProfile();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
 
   // ============================================================
@@ -724,9 +730,7 @@ Thank you.`
             <Cog6ToothIcon className="h-5 w-5" />
           </button>
 
-          {/* ================================================= */}
           {/* NOTIFICATION BELL */}
-          {/* ================================================= */}
 
           <Link
             to="/notifications"
@@ -741,7 +745,6 @@ Thank you.`
           >
             <BellIcon className="h-5 w-5" />
 
-            {/* UNREAD BADGE */}
             {unreadCount > 0 && (
               <span
                 className="

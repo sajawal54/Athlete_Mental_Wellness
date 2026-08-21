@@ -143,13 +143,13 @@ class MoodLogAPITestCase(APITestCase):
         self.assertEqual(response.data["mood"], "great")
         self.assertEqual(response.data["user"], self.user.username)
         self.assertIn("Fantastic energy!", response.data["ai_message"])
-        self.assertEqual(response.data["xp_gained"], 80)
+        self.assertEqual(response.data["xp_gained"], 120)
 
         # Verify DB
         self.assertTrue(MoodLog.objects.filter(user=self.user, mood="great").exists())
 
         # Verify profile method calls
-        mock_add_xp.assert_called_once_with(80)
+        mock_add_xp.assert_called_once_with(120)
         mock_update_streak.assert_called_once_with(timezone.localdate())
 
     def test_duplicate_check_in_same_day_fails(self):

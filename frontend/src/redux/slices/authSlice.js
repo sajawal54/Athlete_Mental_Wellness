@@ -11,13 +11,13 @@ const token = localStorage.getItem("accessToken");
 
 const storedUser = localStorage.getItem("user");
 
-let parsedUser = null;
-
-try {
-  parsedUser = storedUser ? JSON.parse(storedUser) : null;
-} catch {
-  parsedUser = null;
-}
+const parsedUser = (() => {
+  try {
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    return null;
+  }
+})();
 
 const initialState = {
   token: token || null,

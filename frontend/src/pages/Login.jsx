@@ -14,7 +14,9 @@ function Login() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { loading, isAuthenticated } = useSelector((state) => state.auth);
+  const { loading, isAuthenticated } = useSelector(
+    (state) => state.auth
+  );
 
   const {
     register,
@@ -32,13 +34,13 @@ function Login() {
     if (isAuthenticated) {
       const storedUser = localStorage.getItem("user");
 
-      let user = null;
-
-      try {
-        user = storedUser ? JSON.parse(storedUser) : null;
-      } catch {
-        user = null;
-      }
+      const user = (() => {
+        try {
+          return storedUser ? JSON.parse(storedUser) : null;
+        } catch {
+          return null;
+        }
+      })();
 
       if (user?.is_counselor === true) {
         navigate("/counselor/dashboard", {
@@ -228,7 +230,11 @@ function Login() {
             </div>
 
             {/* SUBMIT BUTTON */}
-            <Button type="submit" loading={loading} className="w-full">
+            <Button
+              type="submit"
+              loading={loading}
+              className="w-full"
+            >
               Login
             </Button>
           </form>

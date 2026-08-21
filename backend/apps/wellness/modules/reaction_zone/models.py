@@ -1,5 +1,5 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 
 User = settings.AUTH_USER_MODEL
@@ -8,20 +8,20 @@ User = settings.AUTH_USER_MODEL
 class ReactionPrompt(models.Model):
 
     prompt = models.CharField(
-        max_length=250
+        max_length=250,
     )
 
     correct_answer = models.CharField(
-        max_length=100
+        max_length=100,
     )
 
     difficulty = models.CharField(
         max_length=30,
-        default="easy"
+        default="easy",
     )
 
     is_active = models.BooleanField(
-        default=True
+        default=True,
     )
 
     class Meta:
@@ -40,37 +40,42 @@ class ReactionGameSession(models.Model):
     )
 
     score = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     total_prompts = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     correct_answers = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     duration_seconds = models.PositiveIntegerField(
-        default=0
+        default=0,
     )
 
     status = models.CharField(
         max_length=20,
-        default="active"
+        default="active",
     )
 
     created_at = models.DateTimeField(
-        auto_now_add=True
+        auto_now_add=True,
     )
 
     completed_at = models.DateTimeField(
         null=True,
-        blank=True
+        blank=True,
     )
 
     class Meta:
-        ordering = ["-score", "-created_at"]
+        ordering = [
+            "-score",
+            "-created_at",
+        ]
 
     def __str__(self):
-        return f"{self.user} - {self.score}"
+        return (
+            f"{self.user} - {self.score}"
+        )
