@@ -24,7 +24,7 @@ const DEFAULT_SCENARIO = {
 export const IntegrityCrossroadsActivity = ({
   onProgress,
   onComplete,
-  isSubmitting,
+  isSubmitting = false,
 }) => {
   const [scenarios, setScenarios] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -35,12 +35,15 @@ export const IntegrityCrossroadsActivity = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  // ---------------------------------------------------------
+  // FETCH SCENARIOS
+  // ---------------------------------------------------------
+
   const fetchScenarios = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Step 1: Prompt AI to generate dynamic ethical scenarios
       const aiPrompt = `
         Generate 2 realistic sports ethics/integrity dilemmas for a competitive athlete in English.
         Return ONLY a JSON array with 2 scenario objects in this exact format:
@@ -73,11 +76,16 @@ export const IntegrityCrossroadsActivity = ({
       let parsed = null;
 
       if (typeof rawData === 'string') {
-        const cleanJson = rawData.substring(
-          rawData.indexOf('['),
-          rawData.lastIndexOf(']') + 1
-        );
-        parsed = JSON.parse(cleanJson);
+        try {
+          const startIndex = rawData.indexOf('[');
+          const endIndex = rawData.lastIndexOf(']');
+          if (startIndex !== -1 && endIndex !== -1) {
+            const cleanJson = rawData.substring(startIndex, endIndex + 1);
+            parsed = JSON.parse(cleanJson);
+          }
+        } catch (parseErr) {
+          console.warn('Could not parse AI scenario JSON array:', parseErr);
+        }
       } else if (Array.isArray(rawData)) {
         parsed = rawData;
       }
@@ -85,7 +93,6 @@ export const IntegrityCrossroadsActivity = ({
       if (parsed && Array.isArray(parsed) && parsed.length > 0) {
         setScenarios(parsed);
       } else {
-        // Fallback to service API or hardcoded scenario
         const res = await wellnessService.getIntegrityScenarios();
 
         if (res?.success && res?.scenarios?.length > 0) {
@@ -103,18 +110,34 @@ export const IntegrityCrossroadsActivity = ({
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchScenarios();
-    }, 0);
+    let isMounted = true;
 
-    return () => clearTimeout(timer);
+    const loadData = async () => {
+      if (isMounted) {
+        await fetchScenarios();
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchScenarios]);
 
   const activeScenario = scenarios[currentIndex] || DEFAULT_SCENARIO;
 
+  // ---------------------------------------------------------
+  // SUBMIT CHOICE & EVALUATE
+  // ---------------------------------------------------------
+
   const handleSubmitChoice = async () => {
     if (selectedChoiceIndex === null || !activeScenario) {
       setError('Please select a stance on this ethical dilemma.');
+      return;
+    }
+
+    if (submitting || isSubmitting) {
       return;
     }
 
@@ -123,22 +146,20 @@ export const IntegrityCrossroadsActivity = ({
       setError(null);
 
       const chosenOption =
-        activeScenario.choices[selectedChoiceIndex]?.text;
+        activeScenario.choices[selectedChoiceIndex]?.text || '';
 
-      // Ask AI to evaluate choice and user reflection
       const evalPrompt = `
         Scenario: "${activeScenario.dilemma}"
         Selected Choice: "${chosenOption}"
         Correct Integrity Choice Index: ${activeScenario.correct_choice_index ?? 0}
         User Choice Index: ${selectedChoiceIndex}
-        User Reflection: "${reflection || 'No reflection provided'}"
+        User Reflection: "${reflection.trim() || 'No reflection provided'}"
 
         Evaluate this decision regarding integrity, sportsmanship, and character in concise English.
         Return ONLY a JSON object:
         {
           "score": ${
-            selectedChoiceIndex ===
-            (activeScenario.correct_choice_index ?? 0)
+            selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0)
               ? 95
               : 70
           },
@@ -160,15 +181,19 @@ export const IntegrityCrossroadsActivity = ({
 
       if (typeof rawEval === 'string') {
         try {
-          const cleanJson = rawEval.substring(
-            rawEval.indexOf('{'),
-            rawEval.lastIndexOf('}') + 1
-          );
-
-          parsedEval = JSON.parse(cleanJson);
+          const startIndex = rawEval.indexOf('{');
+          const endIndex = rawEval.lastIndexOf('}');
+          if (startIndex !== -1 && endIndex !== -1) {
+            const cleanJson = rawEval.substring(startIndex, endIndex + 1);
+            parsedEval = JSON.parse(cleanJson);
+          }
         } catch {
           parsedEval = {
-            score: selectedChoiceIndex === 0 ? 95 : 70,
+            score:
+              selectedChoiceIndex ===
+              (activeScenario.correct_choice_index ?? 0)
+                ? 95
+                : 70,
             feedback:
               'Upholding honesty and fair play builds long-term athletic respect and personal character.',
           };
@@ -180,7 +205,9 @@ export const IntegrityCrossroadsActivity = ({
       const finalResult = {
         score:
           parsedEval.score ||
-          (selectedChoiceIndex === 0 ? 95 : 70),
+          (selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0)
+            ? 95
+            : 70),
         feedback:
           parsedEval.feedback ||
           'Your decision reflects how you navigate high-pressure ethical situations in sports.',
@@ -194,13 +221,16 @@ export const IntegrityCrossroadsActivity = ({
       );
 
       if (onProgress) {
-        onProgress(prog, 3);
+        await onProgress(prog, 3);
       }
     } catch (err) {
       console.error('Integrity submission error:', err);
 
       setResult({
-        score: selectedChoiceIndex === 0 ? 95 : 70,
+        score:
+          selectedChoiceIndex === (activeScenario.correct_choice_index ?? 0)
+            ? 95
+            : 70,
         feedback:
           'Demonstrating honesty under pressure strengthens team culture and personal integrity.',
       });
@@ -209,32 +239,46 @@ export const IntegrityCrossroadsActivity = ({
     }
   };
 
+  // ---------------------------------------------------------
+  // NAVIGATION HANDLERS
+  // ---------------------------------------------------------
+
   const handleNext = () => {
     if (currentIndex < scenarios.length - 1) {
       setCurrentIndex((i) => i + 1);
       setSelectedChoiceIndex(null);
       setReflection('');
       setResult(null);
+      setError(null);
     }
   };
 
-  const handleFinish = () => {
-    if (onProgress) {
-      onProgress(100, 3);
-    }
+  const handleFinish = async () => {
+    try {
+      if (onProgress) {
+        await onProgress(100, 3);
+      }
 
-    if (onComplete) {
-      onComplete(
-        result?.score || 90,
-        result?.feedback || 'Ethical crossroads completed.'
-      );
+      if (onComplete) {
+        await onComplete(
+          result?.score || 90,
+          result?.feedback || 'Ethical crossroads completed.'
+        );
+      }
+    } catch (err) {
+      console.error('Finish activity error:', err);
+      setError('Could not complete activity. Please try again.');
     }
   };
+
+  // ---------------------------------------------------------
+  // LOADING VIEW
+  // ---------------------------------------------------------
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3 text-slate-500 font-semibold text-xs">
+      <div className="flex items-center justify-center py-12 select-none">
+        <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
           Generating ethical dilemma scenarios...
         </div>
@@ -242,11 +286,22 @@ export const IntegrityCrossroadsActivity = ({
     );
   }
 
+  // ---------------------------------------------------------
+  // MAIN UI RENDER
+  // ---------------------------------------------------------
+
   return (
-    <div className="space-y-5 text-slate-800 max-w-md mx-auto">
+    <div className="mx-auto max-w-md space-y-5 text-left text-slate-800 select-none">
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700 text-left">
-          ⚠️ {error}
+        <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+          <span>⚠️ {error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="font-bold text-rose-400 hover:text-rose-600"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -260,7 +315,7 @@ export const IntegrityCrossroadsActivity = ({
         <button
           type="button"
           onClick={fetchScenarios}
-          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline transition"
+          className="cursor-pointer text-[11px] font-bold text-indigo-600 underline transition hover:text-indigo-800"
         >
           🔄 Refresh Dilemmas
         </button>
@@ -272,39 +327,35 @@ export const IntegrityCrossroadsActivity = ({
           <span
             key={scenarioItem.id || idx}
             className={`h-1.5 flex-1 rounded-full transition ${
-              idx === currentIndex
-                ? 'bg-indigo-600'
-                : 'bg-slate-200'
+              idx === currentIndex ? 'bg-indigo-600' : 'bg-slate-200'
             }`}
           />
         ))}
       </div>
 
       {/* DILEMMA CARD */}
-      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-1.5 text-left">
+      <div className="space-y-1.5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
         <h3 className="text-sm font-black text-slate-800">
           {activeScenario.title}
         </h3>
 
-        <p className="text-xs leading-relaxed text-slate-700 font-medium">
+        <p className="text-xs font-medium leading-relaxed text-slate-700">
           {activeScenario.dilemma}
         </p>
       </div>
 
       {/* CHOICES */}
-      <div className="space-y-2 text-left">
+      <div className="space-y-2">
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
           What would you do?
         </div>
 
         {activeScenario.choices?.map((choice, idx) => {
           const isSelected = selectedChoiceIndex === idx;
-          const text =
-            typeof choice === 'string' ? choice : choice.text;
+          const text = typeof choice === 'string' ? choice : choice.text;
 
           const isCorrect =
-            result &&
-            idx === (activeScenario.correct_choice_index ?? 0);
+            result && idx === (activeScenario.correct_choice_index ?? 0);
 
           const isUserChoice = result && isSelected;
 
@@ -316,12 +367,10 @@ export const IntegrityCrossroadsActivity = ({
               borderBgStyles =
                 'border-emerald-500 bg-emerald-50/80 shadow-2xs';
             } else if (isUserChoice && !isCorrect) {
-              borderBgStyles =
-                'border-rose-400 bg-rose-50/80 shadow-2xs';
+              borderBgStyles = 'border-rose-400 bg-rose-50/80 shadow-2xs';
             }
           } else if (isSelected) {
-            borderBgStyles =
-              'border-indigo-600 bg-indigo-50/80 shadow-2xs';
+            borderBgStyles = 'border-indigo-600 bg-indigo-50/80 shadow-2xs';
           }
 
           return (
@@ -330,7 +379,7 @@ export const IntegrityCrossroadsActivity = ({
               type="button"
               disabled={!!result}
               onClick={() => setSelectedChoiceIndex(idx)}
-              className={`w-full text-left rounded-xl p-3 transition border flex items-start gap-2.5 ${borderBgStyles}`}
+              className={`flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition ${borderBgStyles}`}
             >
               <span
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
@@ -345,12 +394,12 @@ export const IntegrityCrossroadsActivity = ({
               </span>
 
               <div className="flex-1">
-                <span className="text-xs font-medium text-slate-800 leading-snug">
+                <span className="text-xs font-medium leading-snug text-slate-800">
                   {text}
                 </span>
 
                 {result && isCorrect && (
-                  <span className="block text-[10px] font-bold text-emerald-700 mt-0.5">
+                  <span className="mt-0.5 block text-[10px] font-bold text-emerald-700">
                     ✓ Highest Integrity Stance
                   </span>
                 )}
@@ -362,7 +411,7 @@ export const IntegrityCrossroadsActivity = ({
 
       {/* REFLECTION NOTE */}
       {!result && (
-        <div className="text-left">
+        <div>
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             Personal Reflection (Optional)
           </label>
@@ -372,7 +421,7 @@ export const IntegrityCrossroadsActivity = ({
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
             placeholder="Why does this choice align with your personal values?"
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 outline-none focus:border-indigo-500"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 outline-none transition focus:border-indigo-500"
           />
         </div>
       )}
@@ -384,33 +433,29 @@ export const IntegrityCrossroadsActivity = ({
             type="button"
             onClick={handleSubmitChoice}
             disabled={
-              submitting ||
-              isSubmitting ||
-              selectedChoiceIndex === null
+              submitting || isSubmitting || selectedChoiceIndex === null
             }
-            className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition"
+            className="w-full cursor-pointer rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting
-              ? 'Analyzing Ethical Stance...'
-              : 'Submit Decision & Evaluate'}
+            {submitting ? 'Analyzing Ethical Stance...' : 'Submit Decision & Evaluate'}
           </button>
         </div>
       )}
 
       {/* FEEDBACK RESULT PANEL */}
       {result && (
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 space-y-3 text-left">
+        <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-black text-slate-800">
               Values & Integrity Feedback
             </h4>
 
-            <span className="text-sm font-black text-indigo-700 font-mono">
+            <span className="font-mono text-sm font-black text-indigo-700">
               Score: {result.score}%
             </span>
           </div>
 
-          <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-xl border border-indigo-100">
+          <p className="rounded-xl border border-indigo-100 bg-white p-3 text-xs font-medium leading-relaxed text-slate-700">
             {result.feedback}
           </p>
 
@@ -418,7 +463,7 @@ export const IntegrityCrossroadsActivity = ({
             <button
               type="button"
               onClick={handleNext}
-              className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 transition"
+              className="w-full cursor-pointer rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700"
             >
               Next Scenario →
             </button>
@@ -426,7 +471,7 @@ export const IntegrityCrossroadsActivity = ({
             <button
               type="button"
               onClick={handleFinish}
-              className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
+              className="w-full cursor-pointer rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
             >
               ✓ Complete Activity & Claim XP
             </button>

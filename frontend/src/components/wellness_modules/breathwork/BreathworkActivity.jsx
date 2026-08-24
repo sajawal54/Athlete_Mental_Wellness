@@ -40,6 +40,7 @@ export const BreathworkActivity = ({ onProgress, onComplete, isSubmitting }) => 
       }
       
       if (onComplete) {
+        // Backend / Parent ko 100% complete signal bhejna
         onComplete(100, `Completed ${minsCompleted} min box breathwork session.`);
       }
     } catch (err) {

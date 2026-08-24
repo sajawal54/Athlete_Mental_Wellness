@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from rest_framework import status
@@ -47,14 +48,52 @@ def notify_wellness_completion(
 def codex_categories_view(request):
     """
     Return all active Codex categories
-    with their active lessons.
+    with only their active lessons and daily reset evaluated.
     """
+
+    today = timezone.localdate()
 
     categories = (
         CodexCategory.objects
         .filter(is_active=True)
-        .prefetch_related("lessons")
+        .prefetch_related(
+            Prefetch(
+                "lessons",
+                queryset=CodexLesson.objects.filter(
+                    is_active=True
+                ).order_by("order"),
+            )
+        )
     )
+
+    # Evaluate daily reset for completed lesson progress.
+    user_progresses = UserLessonProgress.objects.filter(
+        user=request.user,
+        status="completed",
+    )
+
+    for prog in user_progresses:
+        completed_date = None
+
+        if prog.completed_at:
+            completed_date = timezone.localtime(
+                prog.completed_at
+            ).date()
+
+        # Reset previous-day completion.
+        if completed_date and completed_date < today:
+            prog.status = "available"
+            prog.progress = 0
+            prog.completed_at = None
+
+            # UserLessonProgress does not have updated_at.
+            prog.save(
+                update_fields=[
+                    "status",
+                    "progress",
+                    "completed_at",
+                ]
+            )
 
     serializer = CodexCategorySerializer(
         categories,
@@ -66,7 +105,8 @@ def codex_categories_view(request):
         {
             "success": True,
             "categories": serializer.data,
-        }
+        },
+        status=status.HTTP_200_OK,
     )
 
 
@@ -104,7 +144,8 @@ def codex_lesson_detail_view(
         {
             "success": True,
             "lesson": serializer.data,
-        }
+        },
+        status=status.HTTP_200_OK,
     )
 
 
@@ -133,7 +174,9 @@ def codex_lesson_start_view(
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    progress, _ = UserLessonProgress.objects.get_or_create(
+    today = timezone.localdate()
+
+    progress, created = UserLessonProgress.objects.get_or_create(
         user=request.user,
         lesson=lesson,
         defaults={
@@ -143,13 +186,31 @@ def codex_lesson_start_view(
         },
     )
 
-    if progress.status == "available":
+    completed_date = None
+
+    if progress.completed_at:
+        completed_date = timezone.localtime(
+            progress.completed_at
+        ).date()
+
+    if completed_date and completed_date < today:
+        progress.status = "in_progress"
+        progress.progress = 50
+        progress.started_at = timezone.now()
+        progress.completed_at = None
+
+        progress.save()
+
+    elif progress.status == "available":
         progress.status = "in_progress"
         progress.started_at = timezone.now()
+        progress.progress = 50
+
         progress.save(
             update_fields=[
                 "status",
                 "started_at",
+                "progress",
             ]
         )
 
@@ -158,7 +219,8 @@ def codex_lesson_start_view(
             "success": True,
             "status": progress.status,
             "progress": progress.progress,
-        }
+        },
+        status=status.HTTP_200_OK,
     )
 
 
@@ -169,7 +231,8 @@ def codex_lesson_complete_view(
     lesson_id,
 ):
     """
-    Complete a Codex lesson and award XP once.
+    Complete a Codex lesson and award XP safely
+    with daily reset support.
     """
 
     try:
@@ -187,13 +250,23 @@ def codex_lesson_complete_view(
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    today = timezone.localdate()
+
     progress, _ = UserLessonProgress.objects.get_or_create(
         user=request.user,
         lesson=lesson,
     )
 
+    completed_date = None
+
+    if progress.completed_at:
+        completed_date = timezone.localtime(
+            progress.completed_at
+        ).date()
+
     already_completed = (
         progress.status == "completed"
+        and completed_date == today
     )
 
     xp_awarded = 0
@@ -211,15 +284,17 @@ def codex_lesson_complete_view(
             ]
         )
 
-        if lesson.xp_reward > 0:
+        reward = int(lesson.xp_reward or 0)
+
+        if reward > 0:
             award_xp(
                 request.user,
-                lesson.xp_reward,
+                reward,
                 "wellness_codex",
                 f"Completed lesson: {lesson.title}",
             )
 
-            xp_awarded = lesson.xp_reward
+            xp_awarded = reward
 
             notify_wellness_completion(
                 user=request.user,
@@ -232,11 +307,18 @@ def codex_lesson_complete_view(
                 action_url="/modules",
             )
 
+    else:
+        xp_awarded = int(lesson.xp_reward or 0)
+
     return Response(
         {
             "success": True,
             "already_completed": already_completed,
             "xp_awarded": xp_awarded,
-            "message": "Lesson marked as completed.",
-        }
+            "message": (
+                f"Lesson marked as completed. "
+                f"You earned {xp_awarded} XP!"
+            ),
+        },
+        status=status.HTTP_200_OK,
     )

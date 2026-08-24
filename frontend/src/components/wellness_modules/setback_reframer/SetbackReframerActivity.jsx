@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
@@ -13,7 +13,7 @@ const CATEGORIES = [
 export const SetbackReframerActivity = ({
   onProgress,
   onComplete,
-  isSubmitting,
+  isSubmitting = false,
 }) => {
   const [thought, setThought] = useState('');
   const [category, setCategory] = useState('performance');
@@ -22,12 +22,23 @@ export const SetbackReframerActivity = ({
   const [error, setError] = useState(null);
   const [isDone, setIsDone] = useState(false);
 
+  const onProgressRef = useRef(onProgress);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
   const handleGenerate = async (e) => {
     e?.preventDefault();
 
     const trimmed = thought.trim();
 
-    if (!trimmed) {
+    if (!trimmed || loading) {
       setError('Please describe a setback or negative thought.');
       return;
     }
@@ -71,17 +82,19 @@ RESPONSE STYLE:
       );
 
       if (res?.success) {
-        let aiText = res.data;
+        const aiText = res.data;
         let parsedData = {};
 
-        // Check if output is formatted as JSON or plain text/markdown
         try {
           if (
             typeof aiText === 'string' &&
             aiText.trim().startsWith('{')
           ) {
             parsedData = JSON.parse(aiText);
-          } else if (typeof aiText === 'object' && aiText !== null) {
+          } else if (
+            typeof aiText === 'object' &&
+            aiText !== null
+          ) {
             parsedData = aiText;
           } else {
             parsedData = {
@@ -105,14 +118,13 @@ RESPONSE STYLE:
             parsedData.action ||
             null,
 
-          safety_message:
-            parsedData.safety_message || null,
+          safety_message: parsedData.safety_message || null,
         };
 
         setReframeResult(finalResult);
 
-        if (onProgress) {
-          onProgress(100, 3);
+        if (onProgressRef.current) {
+          onProgressRef.current(100, 3);
         }
       } else {
         throw new Error(
@@ -121,8 +133,8 @@ RESPONSE STYLE:
       }
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          err.message ||
+        err?.response?.data?.message ||
+          err?.message ||
           'Reframe generation failed. Please check your connection and try again.'
       );
     } finally {
@@ -130,34 +142,53 @@ RESPONSE STYLE:
     }
   };
 
-  const handleClaimXP = () => {
+  const handleClaimXP = async () => {
+    if (isDone || isSubmitting || !reframeResult) return;
+
     setIsDone(true);
 
-    if (onComplete) {
-      onComplete(
-        100,
-        reframeResult?.reframe || 'Completed setback reframe.'
-      );
+    try {
+      if (onProgressRef.current) {
+        await onProgressRef.current(100, 3);
+      }
+
+      if (onCompleteRef.current) {
+        await onCompleteRef.current(
+          100,
+          reframeResult?.reframe || 'Completed setback reframe.'
+        );
+      }
+    } catch (err) {
+      console.error('Setback Reframer completion error:', err);
+      setIsDone(false);
     }
+  };
+
+  const handleTryAnother = () => {
+    if (loading || isSubmitting) return;
+
+    setReframeResult(null);
+    setThought('');
+    setError(null);
+    setIsDone(false);
   };
 
   return (
     <div className="space-y-6">
-      {/* ERROR ALERT */}
       {error && (
         <div className="flex items-start justify-between rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
           <span>⚠️ {error}</span>
 
           <button
+            type="button"
             onClick={() => setError(null)}
-            className="ml-2 font-bold text-rose-500"
+            className="ml-2 cursor-pointer font-bold text-rose-500 hover:text-rose-700"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* INPUT FORM */}
       {!isDone && (
         <form
           onSubmit={handleGenerate}
@@ -171,7 +202,8 @@ RESPONSE STYLE:
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400"
+              disabled={loading}
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400 disabled:opacity-50"
             >
               {CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -185,15 +217,20 @@ RESPONSE STYLE:
             rows={4}
             value={thought}
             onChange={(e) => setThought(e.target.value)}
+            disabled={loading}
             placeholder="e.g. 'I made a critical mistake in the last play and I think everyone blames me. I feel like I always fail under pressure...'"
-            className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-50"
           />
 
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading || !thought.trim()}
-              className="rounded-2xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-50"
+              disabled={
+                loading ||
+                isSubmitting ||
+                !thought.trim()
+              }
+              className="cursor-pointer rounded-2xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? '⏳ Groq AI Reframing...'
@@ -203,7 +240,6 @@ RESPONSE STYLE:
         </form>
       )}
 
-      {/* REFRAME RESULT */}
       {reframeResult && !isDone && (
         <div className="space-y-4 rounded-2xl border border-indigo-200 bg-linear-to-br from-indigo-50 to-purple-50 p-6">
           <div>
@@ -216,14 +252,12 @@ RESPONSE STYLE:
             </h3>
           </div>
 
-          {/* Markdown Response */}
           <div className="prose prose-sm max-w-none text-slate-800 dark:prose-invert prose-headings:font-bold prose-headings:text-indigo-950 prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-indigo-100/60 prose-th:p-2 prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-ul:list-disc prose-ul:pl-4">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {reframeResult.reframe}
             </ReactMarkdown>
           </div>
 
-          {/* ACTION STEP */}
           {reframeResult.action_step && (
             <div className="space-y-1 rounded-2xl border border-indigo-100 bg-white p-4">
               <div className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700">
@@ -236,30 +270,27 @@ RESPONSE STYLE:
             </div>
           )}
 
-          {/* SAFETY MESSAGE */}
           {reframeResult.safety_message && (
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
               ℹ️ {reframeResult.safety_message}
             </div>
           )}
 
-          {/* ACTION BUTTONS */}
           <div className="flex flex-wrap justify-between gap-2 pt-2">
             <button
-              onClick={() => {
-                setReframeResult(null);
-                setThought('');
-                setIsDone(false);
-              }}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              type="button"
+              disabled={loading || isSubmitting}
+              onClick={handleTryAnother}
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
               Try Another Thought
             </button>
 
             <button
+              type="button"
               onClick={handleClaimXP}
               disabled={isSubmitting}
-              className="rounded-xl bg-emerald-600 px-6 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
+              className="cursor-pointer rounded-xl bg-emerald-600 px-6 py-2 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               ✓ Accept Reframe & Claim XP
             </button>

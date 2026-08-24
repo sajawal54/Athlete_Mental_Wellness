@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -82,53 +83,58 @@ def self_talk_analyze_view(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    entry = SelfTalkEntry.objects.create(
-        user=request.user,
-        negative_thought=thought,
-        distortion_type=analysis_res.get(
-            "distortion_type",
-            "",
-        ),
-        analysis=analysis_res.get(
-            "analysis",
-            "",
-        ),
-        suggested_rewrite=analysis_res.get(
-            "suggested_rewrite",
-            "",
-        ),
-        actionable_tip=analysis_res.get(
-            "actionable_tip",
-            "",
-        ),
-    )
+    # Robust module lookup with slug fallbacks first
+    module = get_module_by_slug("self-talk-detective")
+    if not module:
+        module = get_module_by_slug("self_talk_detective")
 
-    # ---------------------------------------------------------
-    # Complete Wellness Module
-    # ---------------------------------------------------------
+    # Use atomic transaction to securely save entry and sync completion status
+    try:
+        with transaction.atomic():
+            # Creating a fresh entry for history tracking
+            entry = SelfTalkEntry.objects.create(
+                user=request.user,
+                negative_thought=thought,
+                distortion_type=analysis_res.get(
+                    "distortion_type",
+                    "",
+                ),
+                analysis=analysis_res.get(
+                    "analysis",
+                    "",
+                ),
+                suggested_rewrite=analysis_res.get(
+                    "suggested_rewrite",
+                    "",
+                ),
+                actionable_tip=analysis_res.get(
+                    "actionable_tip",
+                    "",
+                ),
+            )
 
-    module = get_module_by_slug(
-        "self-talk-detective"
-    )
+            # Explicitly force module completion status update if module exists
+            if module:
+                complete_module(
+                    user=request.user,
+                    module=module,
+                    score=100,
+                )
+
+    except Exception as db_exc:
+        return Response(
+            {
+                "success": False,
+                "message": "Unable to save self-talk entry and update progress.",
+                "error": str(db_exc),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     xp_awarded = 0
 
     if module:
-        result = complete_module(
-            user=request.user,
-            module=module,
-            score=100,
-        )
-
-        xp_awarded = result.get(
-            "xp_awarded",
-            0,
-        )
-
-        # -----------------------------------------------------
-        # Wellness Notification
-        # -----------------------------------------------------
-
+        xp_awarded = int(module.xp_reward or 15)
         if xp_awarded > 0:
             notify_wellness_completion(
                 user=request.user,
@@ -138,6 +144,8 @@ def self_talk_analyze_view(request):
                 ),
                 action_url="/modules",
             )
+    else:
+        xp_awarded = 15  # Fallback XP
 
     return Response(
         {

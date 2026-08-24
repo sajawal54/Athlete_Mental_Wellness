@@ -18,84 +18,103 @@ import {
   ArrowPathIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
-
 import notificationService from "../../services/notificationService";
 import { logout } from "../../redux/slices/authSlice";
-import {
-  getProfileAPI,
-  updateProfileAPI,
-} from "../../services/profileService";
+import { getProfileAPI, updateProfileAPI } from "../../services/profileService";
 import { emergencyService } from "../../services/emergencySupportService";
 import toast from "react-hot-toast";
 
 const SEARCH_ITEMS = [
   {
+    id: "dashboard",
+    title: "Dashboard",
+    description: "View your athlete wellness dashboard",
+    keywords: ["dashboard", "home", "overview", "main"],
+    path: "/dashboard",
+  },
+  {
     id: "mood",
-    title: "Mood Check-In",
+    title: "Mood Tracker",
     description: "Track your daily mood and wellness",
-    keywords: ["mood", "check-in", "checkin", "wellness", "emotion"],
+    keywords: ["mood", "mood tracker", "check-in", "checkin", "emotion", "feeling", "wellness"],
     path: "/mood-checkin",
   },
   {
     id: "goals",
-    title: "Daily Goal",
+    title: "Daily Goals",
     description: "Manage your daily wellness goals",
-    keywords: ["goal", "goals", "daily goal", "target", "focus"],
+    keywords: ["goal", "goals", "daily goal", "daily goals", "target", "focus"],
     path: "/goals",
   },
   {
-    id: "xp",
-    title: "Total XP",
-    description: "View your XP and athlete account level",
-    keywords: ["xp", "experience", "points", "level", "total xp"],
-    path: "/profile",
-  },
-  {
-    id: "streak",
-    title: "Current Streak",
-    description: "Track your consistency and daily streak",
-    keywords: ["streak", "days", "consistency"],
-    path: "/dashboard",
-  },
-  {
-    id: "recent-mood",
-    title: "Recent Mood Activity",
-    description: "View your recent wellness check-ins",
-    keywords: [
-      "recent mood",
-      "mood activity",
-      "history",
-      "activity",
-      "check-ins",
-    ],
-    path: "/mood-checkin",
-  },
-  {
-    id: "ai-coach",
-    title: "AI Coach",
-    description: "Reflect with your AI mental wellness guide",
-    keywords: ["ai", "coach", "ai coach", "guide", "mental", "reflection"],
-    path: "/bio-guide",
-  },
-  {
-    id: "bio-guide",
-    title: "Bio Guide",
-    description: "Get mental wellness guidance from AI",
-    keywords: ["bio", "bio guide", "guide", "ai guide"],
-    path: "/bio-guide",
+    id: "sound-therapy",
+    title: "Sound Therapy",
+    description: "Relax and improve your mental wellness with sounds",
+    keywords: ["sound", "sounds", "sound therapy", "music", "relax", "audio"],
+    path: "/sound-therapy",
   },
   {
     id: "affirmations",
-    title: "Daily Affirmation",
+    title: "AI Affirmations",
     description: "Build mindset and mental resilience",
-    keywords: [
-      "affirmation",
-      "affirmations",
-      "mindset",
-      "resilience",
-      "motivation",
-    ],
+    keywords: ["affirmation", "affirmations", "ai affirmation", "mindset", "resilience", "motivation", "positive"],
     path: "/affirmations",
+  },
+  {
+    id: "bio-guide",
+    title: "AI Bio Guide",
+    description: "Get mental wellness guidance from AI",
+    keywords: ["bio", "bio guide", "ai guide", "ai", "coach", "guide", "mental", "reflection"],
+    path: "/bio-guide",
+  },
+  {
+    id: "gamification",
+    title: "Gamification",
+    description: "Track XP, levels, rewards and progress",
+    keywords: ["gamification", "xp", "experience", "points", "level", "reward", "rewards"],
+    path: "/gamification",
+  },
+  {
+    id: "wellness-modules",
+    title: "Wellness Modules",
+    description: "Explore interactive athlete wellness modules",
+    keywords: ["wellness", "modules", "wellness modules", "activities", "games", "therapy"],
+    path: "/modules",
+  },
+  {
+    id: "trophy-room",
+    title: "Trophy Room",
+    description: "View your trophies, achievements and milestones",
+    keywords: ["trophy", "trophies", "trophy room", "achievement", "achievements", "milestone", "badges"],
+    path: "/trophy-room",
+  },
+  {
+    id: "notifications",
+    title: "Notifications",
+    description: "View your latest wellness notifications",
+    keywords: ["notification", "notifications", "alerts", "messages", "updates"],
+    path: "/notifications",
+  },
+  {
+    id: "support",
+    title: "Emergency Support",
+    description: "Get access to counselor and emergency support",
+    keywords: ["support", "emergency", "counselor", "counselling", "counseling", "help", "doctor"],
+    path: "/support",
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    description: "Manage your account and application preferences",
+    keywords: ["settings", "preferences", "account", "configuration", "options"],
+    path: "/settings",
+  },
+  {
+    id: "profile",
+    title: "Athlete Profile",
+    description: "View and manage your athlete profile",
+    keywords: ["profile", "athlete profile", "account profile", "username", "email"],
+    path: "/profile",
   },
 ];
 
@@ -107,46 +126,33 @@ const INITIAL_PASSWORDS = {
 export default function TopNav({ setSidebarOpen }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activePopup, setActivePopup] = useState(null);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userProfile, setUserProfile] = useState({
     username: "",
     email: "",
     is_counselor: false,
     avatar: null,
   });
-
   const [editUsername, setEditUsername] = useState("");
   const [passwords, setPasswords] = useState(INITIAL_PASSWORDS);
-
   const [loading, setLoading] = useState(false);
-
   const [counselors, setCounselors] = useState([]);
   const [counselorsLoading, setCounselorsLoading] = useState(false);
   const [counselorsError, setCounselorsError] = useState("");
-
-  // ============================================================
-  // NOTIFICATION STATE
-  // ============================================================
-
   const [unreadCount, setUnreadCount] = useState(0);
 
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // ============================================================
-  // AVATAR
-  // ============================================================
-
   const formatAvatarUrl = (avatarPath) => {
-    if (!avatarPath) {
-      return null;
-    }
+    if (!avatarPath) return null;
 
     if (
       avatarPath.startsWith("http://") ||
@@ -156,14 +162,8 @@ export default function TopNav({ setSidebarOpen }) {
       return avatarPath;
     }
 
-    return `http://127.0.0.1:8000${
-      avatarPath.startsWith("/") ? "" : "/"
-    }${avatarPath}`;
+    return `http://127.0.0.1:8000${avatarPath.startsWith("/") ? "" : "/"}${avatarPath}`;
   };
-
-  // ============================================================
-  // PROFILE
-  // ============================================================
 
   const fetchProfile = async () => {
     try {
@@ -187,14 +187,8 @@ export default function TopNav({ setSidebarOpen }) {
       fetchProfile();
     }, 0);
 
-    return () => {
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, []);
-
-  // ============================================================
-  // NOTIFICATION UNREAD COUNT
-  // ============================================================
 
   useEffect(() => {
     let mounted = true;
@@ -202,9 +196,7 @@ export default function TopNav({ setSidebarOpen }) {
     let fetching = false;
 
     const fetchUnreadCount = async () => {
-      if (!mounted || fetching) {
-        return;
-      }
+      if (!mounted || fetching) return;
 
       fetching = true;
 
@@ -215,33 +207,20 @@ export default function TopNav({ setSidebarOpen }) {
           pageSize: 1,
         });
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         const count = Number(data?.unread_count ?? 0);
 
-        setUnreadCount(
-          Number.isFinite(count) && count > 0 ? count : 0
-        );
+        setUnreadCount(Number.isFinite(count) && count > 0 ? count : 0);
       } catch (error) {
-        console.error(
-          "Failed to fetch unread notification count:",
-          error
-        );
+        console.error("Failed to fetch unread notification count:", error);
       } finally {
         fetching = false;
       }
     };
 
-    // ========================================================
-    // REPEATED CHECK
-    // ========================================================
-
     const scheduleNextCheck = () => {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       timer = setTimeout(async () => {
         await fetchUnreadCount();
@@ -249,30 +228,15 @@ export default function TopNav({ setSidebarOpen }) {
       }, 2000);
     };
 
-    // ========================================================
-    // INITIAL CHECK
-    // ========================================================
-
     fetchUnreadCount().then(() => {
       scheduleNextCheck();
     });
-
-    // ========================================================
-    // NOTIFICATION EVENT
-    // ========================================================
 
     const handleNotificationsUpdated = () => {
       fetchUnreadCount();
     };
 
-    window.addEventListener(
-      "notificationsUpdated",
-      handleNotificationsUpdated
-    );
-
-    // ========================================================
-    // TAB VISIBILITY
-    // ========================================================
+    window.addEventListener("notificationsUpdated", handleNotificationsUpdated);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -280,27 +244,13 @@ export default function TopNav({ setSidebarOpen }) {
       }
     };
 
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange
-    );
-
-    // ========================================================
-    // WINDOW FOCUS
-    // ========================================================
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const handleWindowFocus = () => {
       fetchUnreadCount();
     };
 
-    window.addEventListener(
-      "focus",
-      handleWindowFocus
-    );
-
-    // ========================================================
-    // CLEANUP
-    // ========================================================
+    window.addEventListener("focus", handleWindowFocus);
 
     return () => {
       mounted = false;
@@ -309,26 +259,11 @@ export default function TopNav({ setSidebarOpen }) {
         clearTimeout(timer);
       }
 
-      window.removeEventListener(
-        "notificationsUpdated",
-        handleNotificationsUpdated
-      );
-
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
-
-      window.removeEventListener(
-        "focus",
-        handleWindowFocus
-      );
+      window.removeEventListener("notificationsUpdated", handleNotificationsUpdated);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
     };
   }, []);
-
-  // ============================================================
-  // CLICK OUTSIDE
-  // ============================================================
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -345,52 +280,44 @@ export default function TopNav({ setSidebarOpen }) {
       ) {
         setSearchOpen(false);
       }
+
+      if (
+        mobileSearchRef.current &&
+        !mobileSearchRef.current.contains(event.target)
+      ) {
+        setMobileSearchOpen(false);
+      }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
-  // ============================================================
-  // USER INITIALS
-  // ============================================================
+  useEffect(() => {
+    if (mobileSearchOpen) {
+      setTimeout(() => {
+        mobileSearchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [mobileSearchOpen]);
 
   const getInitials = (name) => {
-    if (!name) {
-      return "U";
-    }
-
+    if (!name) return "U";
     return name.slice(0, 2).toUpperCase();
   };
-
-  // ============================================================
-  // LOGOUT
-  // ============================================================
 
   const handleLogout = () => {
     dispatch(logout());
     navigate("/login");
   };
 
-  // ============================================================
-  // SEARCH
-  // ============================================================
-
   const filteredSearchItems = SEARCH_ITEMS.filter((item) => {
     const query = searchQuery.trim().toLowerCase();
 
-    if (!query) {
-      return false;
-    }
+    if (!query) return false;
 
     const searchableText = [
       item.title,
@@ -411,30 +338,34 @@ export default function TopNav({ setSidebarOpen }) {
   };
 
   const handleSearchSelect = (path) => {
-    navigate(path);
+    if (!path) return;
+
     setSearchQuery("");
     setSearchOpen(false);
+    setMobileSearchOpen(false);
+    setDropdownOpen(false);
+    setActivePopup(null);
+
+    navigate(path);
   };
 
   const handleSearchKeyDown = (event) => {
     if (event.key === "Escape") {
+      event.preventDefault();
       setSearchQuery("");
       setSearchOpen(false);
+      setMobileSearchOpen(false);
+      return;
     }
 
     if (
       event.key === "Enter" &&
       filteredSearchItems.length > 0
     ) {
-      handleSearchSelect(
-        filteredSearchItems[0].path
-      );
+      event.preventDefault();
+      handleSearchSelect(filteredSearchItems[0].path);
     }
   };
-
-  // ============================================================
-  // PROFILE UPDATE
-  // ============================================================
 
   const handleUpdateSubmit = async (event) => {
     event.preventDefault();
@@ -466,13 +397,9 @@ export default function TopNav({ setSidebarOpen }) {
         avatar: data?.avatar || previous.avatar,
       }));
 
-      setEditUsername(
-        data?.username || editUsername
-      );
+      setEditUsername(data?.username || editUsername);
 
-      toast.success(
-        "Profile updated successfully!"
-      );
+      toast.success("Profile updated successfully!");
 
       setPasswords(INITIAL_PASSWORDS);
       setActivePopup(null);
@@ -488,33 +415,21 @@ export default function TopNav({ setSidebarOpen }) {
     }
   };
 
-  // ============================================================
-  // COUNSELORS
-  // ============================================================
-
   const loadCounselors = async () => {
     setCounselorsLoading(true);
     setCounselorsError("");
 
     try {
-      const response =
-        await emergencyService.getCounselors();
-
-      const counselorList =
-        response?.counselors || [];
+      const response = await emergencyService.getCounselors();
+      const counselorList = response?.counselors || [];
 
       setCounselors(counselorList);
 
       if (counselorList.length === 0) {
-        setCounselorsError(
-          "No counselors are currently available."
-        );
+        setCounselorsError("No counselors are currently available.");
       }
     } catch (error) {
-      console.error(
-        "Error loading counselors:",
-        error
-      );
+      console.error("Error loading counselors:", error);
 
       setCounselors([]);
       setCounselorsError(
@@ -531,8 +446,7 @@ export default function TopNav({ setSidebarOpen }) {
   };
 
   const handleContactCounselor = (counselor) => {
-    const counselorEmail =
-      counselor?.contact_email;
+    const counselorEmail = counselor?.contact_email;
 
     if (!counselorEmail) {
       toast.error(
@@ -541,15 +455,10 @@ export default function TopNav({ setSidebarOpen }) {
       return;
     }
 
-    const counselorName =
-      counselor?.name || "Doctor";
+    const counselorName = counselor?.name || "Doctor";
+    const username = userProfile?.username || "an athlete";
 
-    const username =
-      userProfile?.username || "an athlete";
-
-    const subject = encodeURIComponent(
-      "Counseling Support Request"
-    );
+    const subject = encodeURIComponent("Counseling Support Request");
 
     const body = encodeURIComponent(
       `Hello ${counselorName},
@@ -565,41 +474,18 @@ Thank you.`
       `&su=${subject}` +
       `&body=${body}`;
 
-    window.open(
-      gmailUrl,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(gmailUrl, "_blank", "noopener,noreferrer");
   };
 
-  // ============================================================
-  // AVATAR URL
-  // ============================================================
-
-  const avatarUrl = formatAvatarUrl(
-    userProfile.avatar
-  );
-
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const avatarUrl = formatAvatarUrl(userProfile.avatar);
 
   return (
     <>
-      {/* ====================================================== */}
-      {/* TOP NAV */}
-      {/* ====================================================== */}
-
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/90 px-6 shadow-sm backdrop-blur-md transition-colors dark:border-slate-800 dark:bg-slate-900/90">
-        {/* LEFT */}
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 shadow-sm backdrop-blur-md transition-colors dark:border-slate-800 dark:bg-slate-900/90 sm:px-6">
+        <div className="flex items-center gap-3 sm:gap-4">
           <button
             type="button"
-            onClick={() =>
-              setSidebarOpen(
-                (previous) => !previous
-              )
-            }
+            onClick={() => setSidebarOpen((previous) => !previous)}
             className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white lg:hidden"
             aria-label="Toggle sidebar"
           >
@@ -610,15 +496,12 @@ Thank you.`
             <h1 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 dark:text-white">
               Executive Workspace
             </h1>
-
             <p className="hidden text-[10px] font-medium text-slate-400 sm:block">
-              Welcome back,{" "}
-              {userProfile.username || "User"}
+              Welcome back, {userProfile.username || "User"}
             </p>
           </div>
         </div>
 
-        {/* SEARCH */}
         <div
           ref={searchRef}
           className="mx-4 hidden max-w-sm flex-1 md:block"
@@ -640,6 +523,7 @@ Thank you.`
               onKeyDown={handleSearchKeyDown}
               placeholder="Search dashboard..."
               aria-label="Search dashboard"
+              autoComplete="off"
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-xs font-medium text-slate-700 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-700/80 dark:bg-slate-800/60 dark:text-slate-200 dark:focus:bg-slate-800"
             />
 
@@ -651,40 +535,37 @@ Thank you.`
                       Dashboard Results
                     </p>
 
-                    {filteredSearchItems.map(
-                      (item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() =>
-                            handleSearchSelect(
-                              item.path
-                            )
-                          }
-                          className="w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-                        >
-                          <p className="text-xs font-bold text-slate-800 dark:text-white">
-                            {item.title}
-                          </p>
-
-                          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-                            {item.description}
-                          </p>
-                        </button>
-                      )
-                    )}
+                    {filteredSearchItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleSearchSelect(item.path);
+                        }}
+                        className="w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                      >
+                        <p className="text-xs font-bold text-slate-800 dark:text-white">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                          {item.description}
+                        </p>
+                      </button>
+                    ))}
                   </div>
                 ) : (
                   <div className="px-4 py-5 text-center">
                     <MagnifyingGlassIcon className="mx-auto h-6 w-6 text-slate-400" />
-
                     <p className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-200">
                       No dashboard result found
                     </p>
-
                     <p className="mt-1 text-[10px] text-slate-500">
-                      Try searching mood, goals, XP,
-                      streak, coach or affirmation.
+                      Try mood, goals, XP, wellness, support or settings.
                     </p>
                   </div>
                 )}
@@ -693,13 +574,10 @@ Thank you.`
           </div>
         </div>
 
-        {/* ACTIONS */}
         <div className="hidden items-center gap-2 xl:flex">
           <button
             type="button"
-            onClick={() =>
-              navigate("/mood-checkin")
-            }
+            onClick={() => navigate("/mood-checkin")}
             className="flex items-center gap-1.5 rounded-xl border border-indigo-200/60 bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
           >
             <PlusCircleIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
@@ -716,28 +594,33 @@ Thank you.`
           </button>
         </div>
 
-        {/* RIGHT */}
-        <div className="flex items-center gap-3">
-          {/* SETTINGS */}
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
-            onClick={() =>
-              navigate("/settings")
-            }
+            onClick={() => {
+              setMobileSearchOpen((previous) => !previous);
+              setSearchOpen(false);
+            }}
+            title="Search"
+            aria-label="Open search"
+            className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-indigo-400 md:hidden"
+          >
+            <MagnifyingGlassIcon className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
             title="Open Settings"
             className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-slate-100 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
           >
             <Cog6ToothIcon className="h-5 w-5" />
           </button>
 
-          {/* NOTIFICATION BELL */}
-
           <Link
             to="/notifications"
             onClick={() => {
-              window.dispatchEvent(
-                new Event("notificationsUpdated")
-              );
+              window.dispatchEvent(new Event("notificationsUpdated"));
             }}
             className="relative flex items-center justify-center rounded-xl p-2 text-slate-600 transition-all hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
             aria-label="Open notifications"
@@ -746,42 +629,16 @@ Thank you.`
             <BellIcon className="h-5 w-5" />
 
             {unreadCount > 0 && (
-              <span
-                className="
-                  absolute -right-0.5 -top-0.5
-                  flex h-5 min-w-5
-                  items-center justify-center
-                  rounded-full
-                  bg-linear-to-br from-red-500 to-rose-600
-                  px-1
-                  text-[10px]
-                  font-black
-                  text-white
-                  shadow-lg
-                  ring-2 ring-white
-                  transition-all duration-200
-                  dark:ring-slate-900
-                "
-              >
-                {unreadCount > 99
-                  ? "99+"
-                  : unreadCount}
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-rose-600 px-1 text-[10px] font-black text-white shadow-lg ring-2 ring-white transition-all duration-200 dark:ring-slate-900">
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </Link>
 
-          {/* USER */}
-          <div
-            className="relative"
-            ref={dropdownRef}
-          >
+          <div className="relative" ref={dropdownRef}>
             <button
               type="button"
-              onClick={() =>
-                setDropdownOpen(
-                  (previous) => !previous
-                )
-              }
+              onClick={() => setDropdownOpen((previous) => !previous)}
               className="flex items-center gap-2.5 rounded-2xl border border-transparent p-1.5 transition-all hover:border-slate-200 hover:bg-slate-100 focus:outline-none dark:hover:border-slate-700 dark:hover:bg-slate-800"
               aria-label="Open user menu"
             >
@@ -793,15 +650,12 @@ Thank you.`
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  getInitials(
-                    userProfile.username
-                  )
+                  getInitials(userProfile.username)
                 )}
               </div>
 
               <span className="hidden max-w-28 truncate text-xs font-bold text-slate-700 dark:text-slate-200 sm:inline">
-                {userProfile.username ||
-                  "User"}
+                {userProfile.username || "User"}
               </span>
             </button>
 
@@ -811,10 +665,8 @@ Thank you.`
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Signed in as
                   </p>
-
                   <p className="mt-0.5 truncate text-xs font-bold text-slate-900 dark:text-white">
-                    {userProfile.username ||
-                      "User"}
+                    {userProfile.username || "User"}
                   </p>
                 </div>
 
@@ -828,9 +680,7 @@ Thank you.`
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400"
                   >
                     <UserCircleIcon className="h-4 w-4 text-slate-400" />
-                    <span>
-                      Athlete Profile Page
-                    </span>
+                    <span>Athlete Profile Page</span>
                   </button>
 
                   <button
@@ -842,9 +692,7 @@ Thank you.`
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400"
                   >
                     <Cog6ToothIcon className="h-4 w-4 text-slate-400" />
-                    <span>
-                      Settings & Preferences
-                    </span>
+                    <span>Settings & Preferences</span>
                   </button>
 
                   <button
@@ -856,9 +704,7 @@ Thank you.`
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-300 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400"
                   >
                     <PencilSquareIcon className="h-4 w-4 text-slate-400" />
-                    <span>
-                      Quick Account Edit
-                    </span>
+                    <span>Quick Account Edit</span>
                   </button>
                 </div>
 
@@ -878,9 +724,92 @@ Thank you.`
         </div>
       </header>
 
-      {/* ====================================================== */}
-      {/* COUNSELORS DRAWER */}
-      {/* ====================================================== */}
+      {mobileSearchOpen && (
+        <div
+          ref={mobileSearchRef}
+          className="fixed left-0 right-0 top-16 z-40 border-b border-slate-200 bg-white px-4 py-3 shadow-xl dark:border-slate-800 dark:bg-slate-900 md:hidden"
+        >
+          <div className="relative">
+            <div className="relative">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+
+              <input
+                ref={mobileSearchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search dashboard..."
+                autoComplete="off"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800"
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchOpen(false);
+                    mobileSearchInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-white"
+                  aria-label="Clear search"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {searchQuery.trim() && (
+              <div className="mt-2 max-h-[65vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+                {filteredSearchItems.length > 0 ? (
+                  <div className="p-2">
+                    <p className="px-3 pb-2 pt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                      Search Results
+                    </p>
+
+                    {filteredSearchItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleSearchSelect(item.path);
+                        }}
+                        className="w-full rounded-xl px-3 py-3 text-left transition-colors hover:bg-indigo-50 active:bg-indigo-100 dark:hover:bg-indigo-950/40 dark:active:bg-indigo-950/60"
+                      >
+                        <p className="text-sm font-bold text-slate-800 dark:text-white">
+                          {item.title}
+                        </p>
+
+                        <p className="mt-0.5 text-[11px] leading-4 text-slate-500 dark:text-slate-400">
+                          {item.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center">
+                    <MagnifyingGlassIcon className="mx-auto h-7 w-7 text-slate-400" />
+
+                    <p className="mt-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                      No result found
+                    </p>
+
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      Try dashboard, mood, goals, XP, wellness, support or settings.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activePopup === "counselors" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-sm">
@@ -898,16 +827,13 @@ Thank you.`
                 </div>
 
                 <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  Connect with a counselor and
-                  request support through email.
+                  Connect with a counselor and request support through email.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  setActivePopup(null)
-                }
+                onClick={() => setActivePopup(null)}
                 className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
                 aria-label="Close counselors"
               >
@@ -945,76 +871,63 @@ Thank you.`
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {counselors.map(
-                    (counselor) => (
-                      <div
-                        key={counselor.id}
-                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-indigo-800"
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-900/40">
-                            <UserGroupIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                              {counselor.name ||
-                                "Counselor"}
-                            </h3>
-
-                            {counselor.specialization && (
-                              <p className="mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                {
-                                  counselor.specialization
-                                }
-                              </p>
-                            )}
-                          </div>
+                  {counselors.map((counselor) => (
+                    <div
+                      key={counselor.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-indigo-800"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-900/40">
+                          <UserGroupIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                         </div>
 
-                        {counselor.bio && (
-                          <p className="mt-4 text-xs leading-5 text-slate-600 dark:text-slate-400">
-                            {counselor.bio}
-                          </p>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                            {counselor.name || "Counselor"}
+                          </h3>
 
-                        {counselor.availability && (
-                          <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900/60">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                              Availability
+                          {counselor.specialization && (
+                            <p className="mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                              {counselor.specialization}
                             </p>
-
-                            <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                              {
-                                counselor.availability
-                              }
-                            </p>
-                          </div>
-                        )}
-
-                        {counselor.contact_email ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleContactCounselor(
-                                counselor
-                              )
-                            }
-                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 active:scale-[0.99]"
-                          >
-                            <EnvelopeIcon className="h-4 w-4" />
-                            Contact Counselor via
-                            Gmail
-                          </button>
-                        ) : (
-                          <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-center text-[11px] font-semibold text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-                            Email contact is not
-                            available
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    )
-                  )}
+
+                      {counselor.bio && (
+                        <p className="mt-4 text-xs leading-5 text-slate-600 dark:text-slate-400">
+                          {counselor.bio}
+                        </p>
+                      )}
+
+                      {counselor.availability && (
+                        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-900/60">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Availability
+                          </p>
+
+                          <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {counselor.availability}
+                          </p>
+                        </div>
+                      )}
+
+                      {counselor.contact_email ? (
+                        <button
+                          type="button"
+                          onClick={() => handleContactCounselor(counselor)}
+                          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 active:scale-[0.99]"
+                        >
+                          <EnvelopeIcon className="h-4 w-4" />
+                          Contact Counselor via Gmail
+                        </button>
+                      ) : (
+                        <div className="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-center text-[11px] font-semibold text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+                          Email contact is not available
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1022,9 +935,7 @@ Thank you.`
             <div className="border-t border-slate-200 p-5 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() =>
-                  setActivePopup(null)
-                }
+                onClick={() => setActivePopup(null)}
                 className="w-full rounded-xl bg-slate-100 py-3 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 Close
@@ -1033,10 +944,6 @@ Thank you.`
           </div>
         </div>
       )}
-
-      {/* ====================================================== */}
-      {/* PROFILE DRAWER */}
-      {/* ====================================================== */}
 
       {activePopup === "profile" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm">
@@ -1049,9 +956,7 @@ Thank you.`
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setActivePopup(null)
-                  }
+                  onClick={() => setActivePopup(null)}
                   className="rounded-xl p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   aria-label="Close profile"
                 >
@@ -1068,9 +973,7 @@ Thank you.`
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    getInitials(
-                      userProfile.username
-                    )
+                    getInitials(userProfile.username)
                   )}
                 </div>
 
@@ -1081,8 +984,7 @@ Thank you.`
                     </p>
 
                     <p className="mt-0.5 text-xs font-bold text-slate-800 dark:text-white">
-                      {userProfile.username ||
-                        "Not available"}
+                      {userProfile.username || "Not available"}
                     </p>
                   </div>
 
@@ -1092,8 +994,7 @@ Thank you.`
                     </p>
 
                     <p className="mt-0.5 break-all text-xs font-bold text-slate-800 dark:text-white">
-                      {userProfile.email ||
-                        "Not available"}
+                      {userProfile.email || "Not available"}
                     </p>
                   </div>
 
@@ -1115,9 +1016,7 @@ Thank you.`
             <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() =>
-                  setActivePopup("update")
-                }
+                onClick={() => setActivePopup("update")}
                 className="w-full rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700"
               >
                 Edit & Update Profile
@@ -1127,10 +1026,6 @@ Thank you.`
         </div>
       )}
 
-      {/* ====================================================== */}
-      {/* UPDATE DRAWER */}
-      {/* ====================================================== */}
-
       {activePopup === "update" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm">
           <div className="flex h-full w-full max-w-sm flex-col justify-between border-l border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
@@ -1139,9 +1034,7 @@ Thank you.`
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      setActivePopup("profile")
-                    }
+                    onClick={() => setActivePopup("profile")}
                     className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     aria-label="Back to profile"
                   >
@@ -1155,9 +1048,7 @@ Thank you.`
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setActivePopup(null)
-                  }
+                  onClick={() => setActivePopup(null)}
                   className="rounded-xl p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   aria-label="Close update profile"
                 >
@@ -1182,11 +1073,7 @@ Thank you.`
                     id="edit-username"
                     type="text"
                     value={editUsername}
-                    onChange={(event) =>
-                      setEditUsername(
-                        event.target.value
-                      )
-                    }
+                    onChange={(event) => setEditUsername(event.target.value)}
                     required
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:focus:bg-slate-800"
                   />
@@ -1213,17 +1100,12 @@ Thank you.`
                         id="new-password"
                         type="password"
                         placeholder="••••••••"
-                        value={
-                          passwords.new_password
-                        }
+                        value={passwords.new_password}
                         onChange={(event) =>
-                          setPasswords(
-                            (previous) => ({
-                              ...previous,
-                              new_password:
-                                event.target.value,
-                            })
-                          )
+                          setPasswords((previous) => ({
+                            ...previous,
+                            new_password: event.target.value,
+                          }))
                         }
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
@@ -1241,17 +1123,12 @@ Thank you.`
                         id="confirm-password"
                         type="password"
                         placeholder="••••••••"
-                        value={
-                          passwords.confirm_password
-                        }
+                        value={passwords.confirm_password}
                         onChange={(event) =>
-                          setPasswords(
-                            (previous) => ({
-                              ...previous,
-                              confirm_password:
-                                event.target.value,
-                            })
-                          )
+                          setPasswords((previous) => ({
+                            ...previous,
+                            confirm_password: event.target.value,
+                          }))
                         }
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
@@ -1264,9 +1141,7 @@ Thank you.`
             <div className="flex gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() =>
-                  setActivePopup("profile")
-                }
+                onClick={() => setActivePopup("profile")}
                 className="w-1/3 rounded-xl bg-slate-100 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 Back
@@ -1278,9 +1153,7 @@ Thank you.`
                 disabled={loading}
                 className="w-2/3 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading
-                  ? "Saving..."
-                  : "Save Changes"}
+                {loading ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

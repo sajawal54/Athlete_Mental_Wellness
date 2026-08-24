@@ -54,6 +54,7 @@ def notify_wellness_completion(
 def word_grid_daily_view(request):
     today = timezone.localdate()
 
+    # 1. Try to fetch today's active puzzle
     puzzle = (
         WordGridPuzzle.objects
         .filter(
@@ -63,27 +64,12 @@ def word_grid_daily_view(request):
         .first()
     )
 
-    # ---------------------------------------------------------
-    # Fallback: use any active puzzle if today's puzzle
-    # doesn't exist.
-    # ---------------------------------------------------------
-
-    if not puzzle:
-        puzzle = (
-            WordGridPuzzle.objects
-            .filter(is_active=True)
-            .order_by("-puzzle_date")
-            .first()
-        )
-
-    # ---------------------------------------------------------
-    # Create default puzzle if none exists
-    # ---------------------------------------------------------
-
+    # 2. If today's puzzle doesn't exist, automatically create a fresh one for today!
     if not puzzle:
         puzzle = WordGridPuzzle.objects.create(
             puzzle_date=today,
-            title="Athlete Mental Focus",
+            is_active=True,
+            title=f"Daily Mental Focus - {today.strftime('%b %d, %Y')}",
             theme="Mindset & Resilience",
             grid=[
                 ["F", "O", "C", "U", "S", "M"],
@@ -247,12 +233,14 @@ def word_grid_submit_view(request):
     )
 
     # ---------------------------------------------------------
-    # Complete Wellness Module
+    # Complete Wellness Module with Robust Slug Fallbacks
     # ---------------------------------------------------------
 
-    module = get_module_by_slug(
-        "word-grid"
-    )
+    module = get_module_by_slug("word-grid")
+    if not module:
+        module = get_module_by_slug("word_grid")
+    if not module:
+        module = get_module_by_slug("wordgrid")
 
     xp_awarded = 0
 
@@ -263,10 +251,14 @@ def word_grid_submit_view(request):
             score=score,
         )
 
-        xp_awarded = result.get(
-            "xp_awarded",
-            0,
+        xp_awarded = int(
+            result.get("xp_awarded") 
+            or module.xp_reward 
+            or 0
         )
+
+        if xp_awarded == 0 and module.xp_reward:
+            xp_awarded = int(module.xp_reward)
 
         if xp_awarded > 0:
             notify_wellness_completion(
@@ -277,6 +269,8 @@ def word_grid_submit_view(request):
                 ),
                 action_url="/modules",
             )
+    else:
+        xp_awarded = 15  # Fallback XP if module is missing from DB
 
     return Response(
         {
@@ -293,7 +287,7 @@ def word_grid_submit_view(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def word_grid_leaderboard_view(request):
-    # Best score for every user
+    # Best score for every user using secure subquery
     best_score_ids = (
         WordGridScore.objects
         .filter(

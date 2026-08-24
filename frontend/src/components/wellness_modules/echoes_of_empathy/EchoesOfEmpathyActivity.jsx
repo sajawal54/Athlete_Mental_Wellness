@@ -1,7 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
-export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }) => {
+const FALLBACK_SCENARIOS = [
+  {
+    id: `dyn_${Date.now()}_1`,
+    title: 'The Rookie Mistake',
+    situation:
+      'Your newest teammate made a critical error in the final minute of a playoff game, costing the team the match. In the locker room, they sit alone, head down, clearly distressed.',
+    prompt:
+      'What do you say to them right now? How do you respond to their distress in a way that builds rather than breaks their confidence?',
+    difficulty: 'beginner',
+  },
+  {
+    id: `dyn_${Date.now()}_2`,
+    title: 'Invisible Injury',
+    situation:
+      'A veteran teammate abruptly announces they are quitting. You later learn they have been silently battling performance anxiety for months and felt too ashamed to speak up.',
+    prompt:
+      'Looking back, what signs might you have missed? And what would you say to them if you had the chance to talk now?',
+    difficulty: 'intermediate',
+  },
+];
+
+export const EchoesOfEmpathyActivity = ({
+  onProgress,
+  onComplete,
+  isSubmitting,
+}) => {
   const [scenarios, setScenarios] = useState([]);
   const [scenarioIdx, setScenarioIdx] = useState(0);
   const [response, setResponse] = useState('');
@@ -13,8 +38,8 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
   const [error, setError] = useState(null);
   const [allDone, setAllDone] = useState(false);
 
-  // 1. FETCH DYNAMIC SCENARIOS FROM AI (NEW QUESTIONS EVERY TIME)
-  const fetchScenarios = useCallback(async () => {
+  // Fetch dynamic empathy scenarios.
+  const loadScenarios = async () => {
     try {
       setLoadingScenarios(true);
       setError(null);
@@ -36,80 +61,114 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       let aiRes = null;
 
       if (typeof wellnessService.getAIResponse === 'function') {
-        aiRes = await wellnessService.getAIResponse(
-          'empathy_scenarios',
-          aiPrompt
-        );
+        aiRes = await wellnessService
+          .getAIResponse('empathy_scenarios', aiPrompt)
+          .catch(() => null);
       }
 
       const rawData = aiRes?.data || aiRes?.result || aiRes;
+
       let parsed = null;
 
       if (typeof rawData === 'string') {
-        const startIndex = rawData.indexOf('[');
-        const endIndex = rawData.lastIndexOf(']');
+        try {
+          const startIndex = rawData.indexOf('[');
+          const endIndex = rawData.lastIndexOf(']');
 
-        if (startIndex !== -1 && endIndex !== -1) {
-          const cleanJson = rawData.substring(startIndex, endIndex + 1);
-          parsed = JSON.parse(cleanJson);
+          if (startIndex !== -1 && endIndex !== -1) {
+            const cleanJson = rawData.substring(
+              startIndex,
+              endIndex + 1
+            );
+
+            parsed = JSON.parse(cleanJson);
+          }
+        } catch {
+          parsed = null;
         }
       } else if (Array.isArray(rawData)) {
         parsed = rawData;
       }
 
       if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-        setScenarios(parsed);
-      } else {
-        // API Fallback
-        const res = await wellnessService.getEmpathyScenarios();
-
-        if (res?.success && res.scenarios?.length > 0) {
-          setScenarios(res.scenarios);
-        } else {
-          // Dynamic Default Scenarios (Fallback)
-          setScenarios([
-            {
-              id: `dyn_${Date.now()}_1`,
-              title: 'The Rookie Mistake',
-              situation:
-                'Your newest teammate made a critical error in the final minute of a playoff game, costing the team the match. In the locker room, they sit alone, head down, clearly distressed.',
-              prompt:
-                'What do you say to them right now? How do you respond to their distress in a way that builds rather than breaks their confidence?',
-              difficulty: 'beginner',
-            },
-            {
-              id: `dyn_${Date.now()}_2`,
-              title: 'Invisible Injury',
-              situation:
-                'A veteran teammate abruptly announces they are quitting. You later learn they have been silently battling performance anxiety for months and felt too ashamed to speak up.',
-              prompt:
-                'Looking back, what signs might you have missed? And what would you say to them if you had the chance to talk now?',
-              difficulty: 'intermediate',
-            },
-          ]);
-        }
+        return parsed;
       }
+
+      const res = await wellnessService
+        .getEmpathyScenarios()
+        .catch(() => null);
+
+      if (res?.success && res.scenarios?.length > 0) {
+        return res.scenarios;
+      }
+
+      return FALLBACK_SCENARIOS;
     } catch (err) {
       console.error('Failed to fetch AI scenarios:', err);
-      setError('AI service reconnecting. Using standard scenarios.');
-    } finally {
-      setLoadingScenarios(false);
+
+      return [
+        {
+          id: `dyn_${Date.now()}_1`,
+          title: 'The Rookie Mistake',
+          situation:
+            'Your newest teammate made a critical error in the final minute of a playoff game, costing the team the match. In the locker room, they sit alone, head down, clearly distressed.',
+          prompt:
+            'What do you say to them right now? How do you respond to their distress in a way that builds rather than breaks their confidence?',
+          difficulty: 'beginner',
+        },
+      ];
     }
+  };
+
+  // Initial scenario loading.
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeScenarios = async () => {
+      const loadedScenarios = await loadScenarios();
+
+      if (cancelled) {
+        return;
+      }
+
+      setScenarios(loadedScenarios);
+      setScenarioIdx(0);
+      setResponse('');
+      setResult(null);
+      setAiHint('');
+      setAllDone(false);
+      setLoadingScenarios(false);
+    };
+
+    initializeScenarios();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchScenarios();
-    }, 0);
+  const handleRefreshScenarios = async () => {
+    setLoadingScenarios(true);
+    setError(null);
 
-    return () => clearTimeout(timer);
-  }, [fetchScenarios]);
+    const loadedScenarios = await loadScenarios();
+
+    setScenarios(loadedScenarios);
+    setScenarioIdx(0);
+    setResponse('');
+    setResult(null);
+    setAiHint('');
+    setAllDone(false);
+    setLoadingScenarios(false);
+  };
 
   const scenario = scenarios[scenarioIdx];
 
-  // 2. ASK AI FOR HINT
+  // Ask AI for a hint.
   const handleGetAiHint = async () => {
-    if (!scenario) return;
+    if (!scenario) {
+      return;
+    }
 
     try {
       setLoadingHint(true);
@@ -119,14 +178,15 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       let res = null;
 
       if (typeof wellnessService.getAIResponse === 'function') {
-        res = await wellnessService.getAIResponse(
-          'empathy_hint',
-          hintPrompt
-        );
+        res = await wellnessService
+          .getAIResponse('empathy_hint', hintPrompt)
+          .catch(() => null);
       }
 
       const hintText =
-        typeof res === 'string' ? res : res?.data || res?.hint;
+        typeof res === 'string'
+          ? res
+          : res?.data || res?.hint;
 
       setAiHint(
         hintText ||
@@ -141,7 +201,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
     }
   };
 
-  // 3. SUBMIT RESPONSE & GET DYNAMIC SCORE
+  // Submit response and get dynamic score.
   const handleSubmit = async (e) => {
     e?.preventDefault();
 
@@ -151,6 +211,10 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       setError(
         'Please write a more detailed empathetic response — at least a sentence or two.'
       );
+      return;
+    }
+
+    if (!scenario) {
       return;
     }
 
@@ -186,13 +250,14 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       let evalRes = null;
 
       if (typeof wellnessService.getAIResponse === 'function') {
-        evalRes = await wellnessService.getAIResponse(
-          'empathy_eval',
-          evalPrompt
-        );
+        evalRes = await wellnessService
+          .getAIResponse('empathy_eval', evalPrompt)
+          .catch(() => null);
       }
 
-      const rawEval = evalRes?.data || evalRes?.result || evalRes;
+      const rawEval =
+        evalRes?.data || evalRes?.result || evalRes;
+
       let parsedEval = null;
 
       if (typeof rawEval === 'string') {
@@ -218,11 +283,12 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
         parsedEval = rawEval;
       }
 
-      // If AI returns valid score, use it;
-      // otherwise compute dynamic score using response features.
       let finalScore = parsedEval?.score;
 
-      if (!finalScore || Number.isNaN(Number(finalScore))) {
+      if (
+        !finalScore ||
+        Number.isNaN(Number(finalScore))
+      ) {
         const baseLen = Math.min(
           40,
           Math.floor(trimmed.length / 3)
@@ -237,28 +303,34 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
 
         finalScore = Math.min(
           97,
-          Math.max(45, 40 + baseLen + emotionWords * 6)
+          Math.max(
+            45,
+            40 + baseLen + emotionWords * 6
+          )
         );
       }
 
-      const finalMetrics = parsedEval?.metrics || {
-        validation: `${Math.min(
-          30,
-          Math.floor(finalScore * 0.3)
-        )}/30`,
-        perspective: `${Math.min(
-          25,
-          Math.floor(finalScore * 0.25)
-        )}/25`,
-        support: `${Math.min(
-          25,
-          Math.floor(finalScore * 0.25)
-        )}/25`,
-        authenticity: `${Math.min(
-          20,
-          Math.floor(finalScore * 0.2)
-        )}/20`,
-      };
+      finalScore = Number(finalScore);
+
+      const finalMetrics =
+        parsedEval?.metrics || {
+          validation: `${Math.min(
+            30,
+            Math.floor(finalScore * 0.3)
+          )}/30`,
+          perspective: `${Math.min(
+            25,
+            Math.floor(finalScore * 0.25)
+          )}/25`,
+          support: `${Math.min(
+            25,
+            Math.floor(finalScore * 0.25)
+          )}/25`,
+          authenticity: `${Math.min(
+            20,
+            Math.floor(finalScore * 0.2)
+          )}/20`,
+        };
 
       const finalFeedback =
         parsedEval?.feedback ||
@@ -266,19 +338,19 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
           ? 'Strong emotional connection! You validated their distress before offering supportive words.'
           : 'Good attempt. Adding explicit validation (e.g., "I hear you") will boost your empathy score.');
 
-      const finalResult = {
+      setResult({
         score: finalScore,
         feedback: finalFeedback,
         improvedResponse:
           parsedEval?.improvedResponse ||
           'I see how much effort you put in. We win as a team and learn as a team — I am right here with you.',
         metrics: finalMetrics,
-      };
-
-      setResult(finalResult);
+      });
 
       const pct = Math.round(
-        ((scenarioIdx + 1) / scenarios.length) * 100
+        ((scenarioIdx + 1) /
+          (scenarios.length || 1)) *
+          100
       );
 
       if (onProgress) {
@@ -314,6 +386,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       setResponse('');
       setResult(null);
       setAiHint('');
+      setError(null);
     } else {
       setAllDone(true);
     }
@@ -323,7 +396,9 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
     if (onComplete) {
       onComplete(
         100,
-        `Completed ${scenarioIdx + 1} empathy scenario(s) in Echoes of Empathy.`
+        `Completed ${
+          scenarioIdx + 1
+        } empathy scenario(s) in Echoes of Empathy.`
       );
     }
   };
@@ -363,8 +438,9 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
 
   if (loadingScenarios) {
     return (
-      <div className="py-12 flex flex-col items-center gap-3 text-slate-500">
+      <div className="flex flex-col items-center gap-3 py-12 text-slate-500">
         <div className="h-7 w-7 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+
         <span className="text-xs font-semibold">
           🤖 AI generating new empathy scenarios...
         </span>
@@ -374,7 +450,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
 
   if (allDone) {
     return (
-      <div className="py-10 text-center space-y-4 max-w-md mx-auto">
+      <div className="mx-auto max-w-md space-y-4 py-10 text-center">
         <div className="text-5xl">💖</div>
 
         <h3 className="text-xl font-black text-slate-800">
@@ -386,9 +462,10 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
         </p>
 
         <button
+          type="button"
           onClick={handleClaimXP}
           disabled={isSubmitting}
-          className="rounded-2xl bg-emerald-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50 transition"
+          className="rounded-2xl bg-emerald-600 px-8 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:opacity-50"
         >
           ✓ Claim XP Reward
         </button>
@@ -397,30 +474,32 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
   }
 
   return (
-    <div className="space-y-5 text-slate-800 max-w-md mx-auto">
+    <div className="mx-auto max-w-md space-y-5 text-slate-800">
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700 flex justify-between items-center text-left">
+        <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 p-3 text-left text-xs font-semibold text-rose-700">
           <span>⚠️ {error}</span>
 
           <button
+            type="button"
             onClick={() => setError(null)}
-            className="text-rose-400 font-bold"
+            className="font-bold text-rose-400 hover:text-rose-600"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* HEADER & REFRESH QUESTIONS */}
+      {/* HEADER */}
       <div className="flex items-center justify-between text-xs">
-        <span className="font-bold uppercase tracking-wider text-indigo-600 text-[11px]">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
           Scenario {scenarioIdx + 1} of {scenarios.length}
         </span>
 
         <button
           type="button"
-          onClick={fetchScenarios}
-          className="font-bold text-indigo-600 hover:text-indigo-800 underline text-[11px] transition"
+          onClick={handleRefreshScenarios}
+          disabled={loadingScenarios}
+          className="text-[11px] font-bold text-indigo-600 underline transition hover:text-indigo-800 disabled:opacity-50"
         >
           🔄 Generate New Questions
         </button>
@@ -431,7 +510,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
         {scenarios.map((scenarioItem, i) => (
           <div
             key={scenarioItem.id || i}
-            className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
               i <= scenarioIdx
                 ? 'bg-indigo-600'
                 : 'bg-slate-200'
@@ -443,22 +522,22 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
       {/* SCENARIO CARD */}
       {scenario && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2.5 text-left shadow-2xs">
+          <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-2xs">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-slate-800">
                 {scenario.title}
               </h3>
 
-              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 capitalize">
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold capitalize text-indigo-700">
                 {scenario.difficulty || 'empathy'}
               </span>
             </div>
 
-            <p className="text-xs text-slate-700 leading-relaxed border-l-2 border-indigo-400 pl-2.5 italic">
+            <p className="border-l-2 border-indigo-400 pl-2.5 text-xs italic leading-relaxed text-slate-700">
               {scenario.situation}
             </p>
 
-            <div className="rounded-xl bg-indigo-50/80 border border-indigo-100 p-2.5 text-xs font-semibold text-indigo-900">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/80 p-2.5 text-xs font-semibold text-indigo-900">
               🗣 {scenario.prompt}
             </div>
           </div>
@@ -479,7 +558,8 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                       Math.min(
                         50,
                         Math.round(
-                          (e.target.value.length / 150) * 50
+                          (e.target.value.length / 150) *
+                            50
                         )
                       ),
                       3
@@ -487,12 +567,12 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                   }
                 }}
                 placeholder="Write your empathetic response here..."
-                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 transition"
+                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200"
               />
 
               {/* AI HINT */}
               {aiHint && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900 leading-relaxed">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] leading-relaxed text-amber-900">
                   💡 <strong>AI Tip:</strong> {aiHint}
                 </div>
               )}
@@ -502,7 +582,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                   type="button"
                   onClick={handleGetAiHint}
                   disabled={loadingHint}
-                  className="text-[11px] font-bold text-indigo-600 hover:underline disabled:opacity-50 transition"
+                  className="text-[11px] font-bold text-indigo-600 transition hover:underline disabled:opacity-50"
                 >
                   {loadingHint
                     ? '✨ Thinking...'
@@ -515,7 +595,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                     loadingSubmit ||
                     response.trim().length < 15
                   }
-                  className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition flex items-center gap-1.5"
+                  className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {loadingSubmit
                     ? '🤖 AI Evaluating...'
@@ -524,29 +604,29 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
               </div>
             </form>
           ) : (
-            /* DYNAMIC SCORE CARD */
             <div
-              className={`rounded-2xl border p-4 space-y-3 text-left transition-all ${colors.bg} ${colors.border}`}
+              className={`space-y-3 rounded-2xl border p-4 text-left transition-all ${colors.bg} ${colors.border}`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-black text-slate-800 block">
+                  <span className="block text-xs font-black text-slate-800">
                     🤖 Dynamic AI Empathy Evaluation
                   </span>
 
-                  <span className="text-[10px] text-slate-500 font-medium">
-                    Calculated based on emotional depth & text tone
+                  <span className="text-[10px] font-medium text-slate-500">
+                    Calculated based on emotional depth & text
+                    tone
                   </span>
                 </div>
 
                 <div
                   className={`rounded-xl px-3 py-1.5 text-center shadow-2xs ${colors.badge}`}
                 >
-                  <div className="text-[8px] uppercase font-black tracking-wider">
+                  <div className="text-[8px] font-black uppercase tracking-wider">
                     AI Score
                   </div>
 
-                  <div className="text-base font-black leading-none mt-0.5">
+                  <div className="mt-0.5 text-base font-black leading-none">
                     {result.score}
                     <span className="text-[10px] font-normal">
                       /100
@@ -556,7 +636,7 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
               </div>
 
               <p
-                className={`text-xs leading-relaxed font-medium bg-white/70 p-2.5 rounded-xl border border-slate-100 ${colors.text}`}
+                className={`rounded-xl border border-slate-100 bg-white/70 p-2.5 text-xs font-medium leading-relaxed ${colors.text}`}
               >
                 {result.feedback}
               </p>
@@ -568,13 +648,13 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                     ([key, val]) => (
                       <div
                         key={key}
-                        className="rounded-lg bg-white p-2 border border-slate-100 text-center"
+                        className="rounded-lg border border-slate-100 bg-white p-2 text-center"
                       >
-                        <div className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                           {key}
                         </div>
 
-                        <div className="text-xs font-black text-indigo-900 mt-0.5">
+                        <div className="mt-0.5 text-xs font-black text-indigo-900">
                           {val}
                         </div>
                       </div>
@@ -583,10 +663,10 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
                 </div>
               )}
 
-              {/* HIGH EQ REPHRASING EXAMPLE */}
+              {/* HIGH EQ REPHRASING */}
               {result.improvedResponse && (
-                <div className="rounded-xl bg-white p-2.5 border border-indigo-100 text-[11px] text-slate-700 space-y-0.5">
-                  <span className="font-bold text-indigo-700 block">
+                <div className="space-y-0.5 rounded-xl border border-indigo-100 bg-white p-2.5 text-[11px] text-slate-700">
+                  <span className="block font-bold text-indigo-700">
                     ✨ High-EQ Rephrasing Example:
                   </span>
 
@@ -597,8 +677,9 @@ export const EchoesOfEmpathyActivity = ({ onProgress, onComplete, isSubmitting }
               )}
 
               <button
+                type="button"
                 onClick={handleNext}
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 transition"
+                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700"
               >
                 {scenarioIdx < scenarios.length - 1
                   ? 'Next Scenario →'

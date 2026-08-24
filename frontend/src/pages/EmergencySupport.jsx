@@ -11,6 +11,10 @@ import {
   ClockIcon,
   LifebuoyIcon,
   ChevronRightIcon,
+  XMarkIcon,
+  CalendarDaysIcon,
+  AcademicCapIcon,
+  InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 
 import { emergencyService } from "../services/emergencySupportService";
@@ -39,23 +43,16 @@ const EmergencySupport = () => {
 
   const [formData, setFormData] = useState(INITIAL_FORM);
 
-  // Selected counselor for callback/support request
   const [selectedCounselor, setSelectedCounselor] = useState(null);
+  const [viewingCounselor, setViewingCounselor] = useState(null);
+
+  // =========================================================
+  // LOAD EMERGENCY SUPPORT DATA
+  // =========================================================
 
   const loadEmergencyData = useCallback(async () => {
     setError("");
-
-    const isInitialLoad =
-      contacts.length === 0 &&
-      counselors.length === 0 &&
-      crisisInfo.length === 0 &&
-      breathingExercises.length === 0;
-
-    if (isInitialLoad) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+    setRefreshing(true);
 
     try {
       const results = await Promise.allSettled([
@@ -73,20 +70,34 @@ const EmergencySupport = () => {
       ] = results;
 
       if (contactsResult.status === "fulfilled") {
-        setContacts(contactsResult.value?.contacts || []);
+        setContacts(
+          contactsResult.value?.contacts ||
+            contactsResult.value ||
+            []
+        );
       }
 
       if (counselorsResult.status === "fulfilled") {
-        setCounselors(counselorsResult.value?.counselors || []);
+        setCounselors(
+          counselorsResult.value?.counselors ||
+            counselorsResult.value ||
+            []
+        );
       }
 
       if (crisisResult.status === "fulfilled") {
-        setCrisisInfo(crisisResult.value?.information || []);
+        setCrisisInfo(
+          crisisResult.value?.information ||
+            crisisResult.value ||
+            []
+        );
       }
 
       if (breathingResult.status === "fulfilled") {
         setBreathingExercises(
-          breathingResult.value?.exercises || []
+          breathingResult.value?.exercises ||
+            breathingResult.value ||
+            []
         );
       }
 
@@ -100,10 +111,15 @@ const EmergencySupport = () => {
         );
       } else if (failedServices > 0) {
         setError(
-          "Some emergency support information could not be loaded. Available services are still shown below."
+          "Some support information could not be loaded. Available services are still shown below."
         );
       }
-    } catch {
+    } catch (err) {
+      console.error(
+        "Emergency support loading error:",
+        err
+      );
+
       setError(
         "Something went wrong while loading emergency support."
       );
@@ -111,20 +127,23 @@ const EmergencySupport = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [
-    contacts.length,
-    counselors.length,
-    crisisInfo.length,
-    breathingExercises.length,
-  ]);
+  }, []);
+
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       loadEmergencyData();
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [loadEmergencyData]);
+
+  // =========================================================
+  // FORM INPUT
+  // =========================================================
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -134,24 +153,21 @@ const EmergencySupport = () => {
       [name]: value,
     }));
 
-    if (callbackSuccess) {
-      setCallbackSuccess("");
-    }
-
-    if (error) {
-      setError("");
-    }
+    setCallbackSuccess("");
   };
 
-  /**
-   * Opens callback form for a specific counselor.
-   *
-   * The counselor object is stored locally so we can send
-   * counselor_id to the backend when the request is submitted.
-   *
-   * The backend should use counselor_id to find the counselor's
-   * trusted email address and send the appointment/request email.
-   */
+  // =========================================================
+  // VIEW COUNSELOR PROFILE
+  // =========================================================
+
+  const handleViewCounselor = (counselor) => {
+    setViewingCounselor(counselor);
+  };
+
+  // =========================================================
+  // REQUEST SUPPORT FROM SELECTED COUNSELOR
+  // =========================================================
+
   const handleCounselorSupport = (counselor) => {
     setSelectedCounselor(counselor);
 
@@ -159,35 +175,50 @@ const EmergencySupport = () => {
       ...INITIAL_FORM,
       reason: `I would like support from ${counselor.name}.`,
       message: counselor.specialization
-        ? `Counselor specialization: ${counselor.specialization}`
+        ? `I am requesting support related to ${counselor.specialization}.`
         : "",
     });
 
     setCallbackSuccess("");
     setError("");
+    setViewingCounselor(null);
     setShowCallbackForm(true);
 
-    window.setTimeout(() => {
+    setTimeout(() => {
       document
         .getElementById("callback-request-section")
         ?.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
-    }, 50);
+    }, 100);
   };
 
-  /**
-   * Opens a general callback form.
-   * No specific counselor is selected in this case.
-   */
+  // =========================================================
+  // GENERAL CALLBACK
+  // =========================================================
+
   const handleGeneralCallback = () => {
     setSelectedCounselor(null);
     setFormData(INITIAL_FORM);
     setCallbackSuccess("");
     setError("");
-    setShowCallbackForm((value) => !value);
+
+    setShowCallbackForm((previous) => !previous);
+
+    setTimeout(() => {
+      document
+        .getElementById("callback-request-section")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 100);
   };
+
+  // =========================================================
+  // SUBMIT SUPPORT / CALLBACK REQUEST
+  // =========================================================
 
   const handleCallbackSubmit = async (event) => {
     event.preventDefault();
@@ -197,37 +228,22 @@ const EmergencySupport = () => {
     setError("");
 
     try {
-      /*
-       * IMPORTANT:
-       *
-       * We send counselor_id instead of trusting counselor_email
-       * from the frontend.
-       *
-       * Backend should:
-       * 1. Find counselor using counselor_id.
-       * 2. Read counselor.email from database.
-       * 3. Create/save callback request.
-       * 4. Send email to that counselor.
-       *
-       * User information:
-       * - name
-       * - contact
-       * - reason
-       * - urgency
-       * - message
-       */
       const requestData = {
         ...formData,
         counselor_id: selectedCounselor?.id || null,
       };
 
       const response =
-        await emergencyService.createCallbackRequest(requestData);
+        await emergencyService.createCallbackRequest(
+          requestData
+        );
 
       if (response?.success) {
+        const counselorName = selectedCounselor?.name;
+
         setCallbackSuccess(
-          selectedCounselor
-            ? `Your support request has been submitted successfully to ${selectedCounselor.name}. The counselor will contact you according to the request details.`
+          counselorName
+            ? `Your support request has been submitted to ${counselorName}. The counselor will contact you according to the request details.`
             : "Your callback request has been submitted successfully. A counselor will contact you according to the request details."
         );
 
@@ -235,22 +251,28 @@ const EmergencySupport = () => {
         setSelectedCounselor(null);
         setShowCallbackForm(false);
 
-        window.setTimeout(() => {
+        setTimeout(() => {
           document
             .getElementById("callback-request-section")
             ?.scrollIntoView({
               behavior: "smooth",
               block: "start",
             });
-        }, 50);
+        }, 100);
       } else {
         setError(
           response?.message ||
-            "Unable to submit your callback request. Please try again."
+            "Unable to submit your request. Please try again."
         );
       }
     } catch (err) {
-      const validationErrors = err?.response?.data?.errors;
+      console.error(
+        "Callback request error:",
+        err
+      );
+
+      const validationErrors =
+        err?.response?.data?.errors;
 
       if (validationErrors) {
         setError(
@@ -259,7 +281,7 @@ const EmergencySupport = () => {
       } else {
         setError(
           err?.response?.data?.message ||
-            "Unable to submit your callback request. Please try again."
+            "Unable to submit your request. Please try again."
         );
       }
     } finally {
@@ -267,9 +289,9 @@ const EmergencySupport = () => {
     }
   };
 
-  const handleRetry = () => {
-    loadEmergencyData();
-  };
+  // =========================================================
+  // LOADING
+  // =========================================================
 
   if (loading) {
     return (
@@ -296,11 +318,17 @@ const EmergencySupport = () => {
     );
   }
 
+  // =========================================================
+  // MAIN PAGE
+  // =========================================================
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 pb-12">
       {/* HERO */}
+
       <section className="relative overflow-hidden rounded-4xl border border-rose-200 bg-linear-to-br from-rose-50 via-white to-orange-50 p-6 shadow-sm sm:p-8 lg:p-10">
         <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-rose-100/60 blur-3xl" />
+
         <div className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-orange-100/50 blur-3xl" />
 
         <div className="relative">
@@ -321,18 +349,18 @@ const EmergencySupport = () => {
                 </h1>
 
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                  Access emergency contacts, counselor support,
-                  crisis information, and a short breathing exercise
-                  from one place.
+                  Access emergency contacts, professional
+                  counselor support, crisis information, and
+                  quick calming exercises from one place.
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={handleRetry}
+              onClick={loadEmergencyData}
               disabled={refreshing}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ArrowPathIcon
                 className={`h-4 w-4 ${
@@ -340,7 +368,9 @@ const EmergencySupport = () => {
                 }`}
               />
 
-              {refreshing ? "Refreshing..." : "Refresh Support"}
+              {refreshing
+                ? "Refreshing..."
+                : "Refresh Support"}
             </button>
           </div>
 
@@ -357,7 +387,7 @@ const EmergencySupport = () => {
 
             <div className="rounded-2xl border border-white/80 bg-white/80 p-4 backdrop-blur">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                Counselors
+                Professionals
               </p>
 
               <p className="mt-1 text-2xl font-black text-slate-900">
@@ -379,6 +409,7 @@ const EmergencySupport = () => {
       </section>
 
       {/* CRISIS WARNING */}
+
       <section className="rounded-3xl border border-red-200 bg-red-50 p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-4">
           <div className="rounded-2xl bg-red-100 p-3">
@@ -391,16 +422,17 @@ const EmergencySupport = () => {
             </h2>
 
             <p className="mt-1 text-sm leading-6 text-red-800">
-              If you or someone else is in immediate danger, contact
-              local emergency services or go to the nearest
-              emergency department now. Do not wait for a callback
-              request.
+              If you or someone else is in immediate danger,
+              contact local emergency services or go to the
+              nearest emergency department now. Do not wait
+              for a callback request.
             </p>
           </div>
         </div>
       </section>
 
       {/* ERROR */}
+
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600" />
@@ -412,9 +444,8 @@ const EmergencySupport = () => {
 
             <button
               type="button"
-              onClick={handleRetry}
-              disabled={refreshing}
-              className="mt-2 inline-flex items-center gap-1 text-xs font-black text-amber-700 underline disabled:opacity-50"
+              onClick={loadEmergencyData}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-black text-amber-700 underline"
             >
               Try again
               <ChevronRightIcon className="h-3.5 w-3.5" />
@@ -424,6 +455,7 @@ const EmergencySupport = () => {
       )}
 
       {/* SUCCESS */}
+
       {callbackSuccess && (
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <CheckCircleIcon className="h-6 w-6 shrink-0 text-emerald-600" />
@@ -435,6 +467,7 @@ const EmergencySupport = () => {
       )}
 
       {/* EMERGENCY CONTACTS */}
+
       <section>
         <div className="mb-5">
           <div className="flex items-center gap-3">
@@ -467,7 +500,7 @@ const EmergencySupport = () => {
             {contacts.map((contact) => (
               <article
                 key={contact.id}
-                className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg"
+                className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50">
@@ -528,6 +561,7 @@ const EmergencySupport = () => {
       </section>
 
       {/* CRISIS INFORMATION */}
+
       <section>
         <div className="mb-5">
           <div className="flex items-center gap-3">
@@ -573,24 +607,32 @@ const EmergencySupport = () => {
         )}
       </section>
 
-      {/* COUNSELORS */}
+      {/* COUNSELOR SUPPORT */}
+
       <section>
-        <div className="mb-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-indigo-50 p-2.5">
-              <UserGroupIcon className="h-5 w-5 text-indigo-600" />
-            </div>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-indigo-50 p-2.5">
+                <UserGroupIcon className="h-5 w-5 text-indigo-600" />
+              </div>
 
-            <div>
-              <h2 className="text-xl font-black text-slate-950">
-                Counselor Support
-              </h2>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Professional Counselor Support
+                </h2>
 
-              <p className="text-sm text-slate-500">
-                Request support from an available counselor.
-              </p>
+                <p className="text-sm text-slate-500">
+                  Connect with a professional counselor for support.
+                </p>
+              </div>
             </div>
           </div>
+
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-700">
+            <CheckCircleIcon className="h-4 w-4" />
+            Available professionals
+          </span>
         </div>
 
         {counselors.length === 0 ? (
@@ -602,16 +644,24 @@ const EmergencySupport = () => {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2">
             {counselors.map((counselor) => (
               <article
                 key={counselor.id}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50">
-                      <UserGroupIcon className="h-6 w-6 text-indigo-600" />
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-indigo-50">
+                      {counselor.profile_image ? (
+                        <img
+                          src={counselor.profile_image}
+                          alt={counselor.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <UserGroupIcon className="h-7 w-7 text-indigo-600" />
+                      )}
                     </div>
 
                     <div>
@@ -627,44 +677,226 @@ const EmergencySupport = () => {
                     </div>
                   </div>
 
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">
                     Available
                   </span>
                 </div>
 
                 {counselor.bio && (
-                  <p className="mt-5 text-sm leading-6 text-slate-600">
+                  <p className="mt-5 line-clamp-3 text-sm leading-6 text-slate-600">
                     {counselor.bio}
                   </p>
                 )}
 
-                {counselor.availability && (
-                  <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 p-3">
-                    <ClockIcon className="h-4 w-4 text-slate-400" />
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                  {counselor.experience && (
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <AcademicCapIcon className="h-4 w-4 text-slate-400" />
 
-                    <span className="text-xs font-bold text-slate-600">
-                      {counselor.availability}
-                    </span>
-                  </div>
-                )}
+                        <span className="text-xs font-bold text-slate-600">
+                          {counselor.experience}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCounselorSupport(counselor)
-                  }
-                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700 hover:shadow-md"
-                >
-                  Request Support
-                  <ChevronRightIcon className="h-4 w-4" />
-                </button>
+                  {counselor.availability && (
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <ClockIcon className="h-4 w-4 text-slate-400" />
+
+                        <span className="text-xs font-bold text-slate-600">
+                          {counselor.availability}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleViewCounselor(counselor)
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <InformationCircleIcon className="h-4 w-4" />
+                    View Profile
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCounselorSupport(counselor)
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700"
+                  >
+                    Request Support
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
               </article>
             ))}
           </div>
         )}
       </section>
 
-      {/* CALLBACK */}
+      {/* COUNSELOR PROFILE MODAL */}
+
+      {viewingCounselor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+          onClick={() => setViewingCounselor(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 p-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-indigo-50">
+                  {viewingCounselor.profile_image ? (
+                    <img
+                      src={viewingCounselor.profile_image}
+                      alt={viewingCounselor.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <UserGroupIcon className="h-8 w-8 text-indigo-600" />
+                  )}
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">
+                    {viewingCounselor.name}
+                  </h2>
+
+                  {viewingCounselor.specialization && (
+                    <p className="mt-1 text-sm font-bold text-indigo-600">
+                      {viewingCounselor.specialization}
+                    </p>
+                  )}
+
+                  <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">
+                    <CheckCircleIcon className="h-3.5 w-3.5" />
+                    Available
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingCounselor(null)}
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close counselor profile"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6 p-6">
+              {viewingCounselor.bio && (
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    Professional Bio
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    {viewingCounselor.bio}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {viewingCounselor.specialization && (
+                  <div className="rounded-2xl bg-indigo-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-indigo-500">
+                      Specialization
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-indigo-950">
+                      {viewingCounselor.specialization}
+                    </p>
+                  </div>
+                )}
+
+                {viewingCounselor.experience && (
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Experience
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {viewingCounselor.experience}
+                    </p>
+                  </div>
+                )}
+
+                {viewingCounselor.availability && (
+                  <div className="rounded-2xl bg-emerald-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-600">
+                      Availability
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-emerald-950">
+                      {viewingCounselor.availability}
+                    </p>
+                  </div>
+                )}
+
+                {viewingCounselor.credentials && (
+                  <div className="rounded-2xl bg-amber-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">
+                      Credentials
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-amber-950">
+                      {viewingCounselor.credentials}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-white p-2">
+                    <CalendarDaysIcon className="h-5 w-5 text-indigo-600" />
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-black text-indigo-950">
+                      Need an appointment or callback?
+                    </h3>
+
+                    <p className="mt-1 text-xs leading-5 text-indigo-700">
+                      Submit a support request and this counselor
+                      will be selected for your request.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleCounselorSupport(
+                      viewingCounselor
+                    )
+                  }
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-xs font-black text-white transition hover:bg-indigo-700"
+                >
+                  Request Appointment / Callback
+                  <ChevronRightIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CALLBACK / APPOINTMENT REQUEST */}
+
       <section
         id="callback-request-section"
         className="scroll-mt-6 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
@@ -677,14 +909,14 @@ const EmergencySupport = () => {
               </div>
 
               <h2 className="text-xl font-black text-slate-950">
-                Request a Callback
+                Request Appointment / Callback
               </h2>
             </div>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-              Ask a counselor to contact you when you need additional
-              support. Your request will be securely recorded in the
-              system.
+              Request support from a professional counselor.
+              Your request will be securely recorded by the
+              application backend.
             </p>
 
             {selectedCounselor && (
@@ -692,7 +924,7 @@ const EmergencySupport = () => {
                 <UserGroupIcon className="h-4 w-4 text-indigo-600" />
 
                 <span className="text-xs font-bold text-indigo-700">
-                  Requesting support from{" "}
+                  Selected counselor:{" "}
                   <span className="font-black">
                     {selectedCounselor.name}
                   </span>
@@ -706,7 +938,9 @@ const EmergencySupport = () => {
             onClick={handleGeneralCallback}
             className="inline-flex shrink-0 items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-xs font-black text-white transition hover:bg-indigo-700"
           >
-            {showCallbackForm ? "Close Form" : "Request Callback"}
+            {showCallbackForm
+              ? "Close Form"
+              : "Request Callback"}
           </button>
         </div>
 
@@ -715,7 +949,6 @@ const EmergencySupport = () => {
             onSubmit={handleCallbackSubmit}
             className="mt-7 space-y-5 border-t border-slate-100 pt-7"
           >
-            {/* SELECTED COUNSELOR */}
             {selectedCounselor && (
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                 <div className="flex items-start gap-3">
@@ -725,7 +958,7 @@ const EmergencySupport = () => {
 
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500">
-                      Selected Counselor
+                      Selected Professional
                     </p>
 
                     <p className="mt-1 text-sm font-black text-indigo-950">
@@ -849,8 +1082,8 @@ const EmergencySupport = () => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs leading-5 text-slate-400">
                 {selectedCounselor
-                  ? `Your request will be sent securely to ${selectedCounselor.name} through the application backend.`
-                  : "Your information is sent securely to the application backend."}
+                  ? `Your request will be securely submitted for ${selectedCounselor.name}.`
+                  : "Your information is securely submitted to the application backend."}
               </p>
 
               <button
@@ -864,6 +1097,8 @@ const EmergencySupport = () => {
 
                 {callbackLoading
                   ? "Submitting..."
+                  : selectedCounselor
+                  ? "Submit Support Request"
                   : "Submit Callback Request"}
               </button>
             </div>
@@ -872,6 +1107,7 @@ const EmergencySupport = () => {
       </section>
 
       {/* BREATHING EXERCISES */}
+
       <section>
         <div className="mb-5">
           <div className="flex items-center gap-3">
@@ -885,8 +1121,8 @@ const EmergencySupport = () => {
               </h2>
 
               <p className="text-sm text-slate-500">
-                A short guided activity you can use without leaving
-                this page.
+                A short guided activity you can use without
+                leaving this page.
               </p>
             </div>
           </div>
@@ -907,21 +1143,21 @@ const EmergencySupport = () => {
                 key={exercise.id}
                 className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50 to-white p-6 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-2xl bg-white p-3 shadow-sm">
-                      <HeartIcon className="h-6 w-6 text-emerald-600" />
-                    </div>
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl bg-white p-3 shadow-sm">
+                    <HeartIcon className="h-6 w-6 text-emerald-600" />
+                  </div>
 
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950">
-                        {exercise.title}
-                      </h3>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-950">
+                      {exercise.title}
+                    </h3>
 
+                    {exercise.duration_seconds && (
                       <p className="mt-1 text-xs font-black uppercase tracking-wide text-emerald-600">
                         {exercise.duration_seconds} seconds
                       </p>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -980,17 +1216,18 @@ const EmergencySupport = () => {
         )}
       </section>
 
-      {/* FOOTER SAFETY NOTE */}
+      {/* SAFETY NOTE */}
+
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
         <div className="flex items-start gap-3">
           <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-slate-500" />
 
           <p className="text-xs leading-6 text-slate-500">
-            Emergency Support provides access to support information
-            and connection options. It is not a replacement for
-            emergency medical services or professional crisis care.
-            If there is immediate danger, contact your local emergency
-            service directly.
+            Emergency Support provides access to support
+            information and connection options. It is not a
+            replacement for emergency medical services or
+            professional crisis care. If there is immediate
+            danger, contact your local emergency service directly.
           </p>
         </div>
       </section>

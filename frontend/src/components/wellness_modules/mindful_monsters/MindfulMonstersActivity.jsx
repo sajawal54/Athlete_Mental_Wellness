@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
 const PHASE_CONFIG = {
@@ -23,8 +23,6 @@ const PHASE_CONFIG = {
     label: 'Rest & Settle',
   },
 };
-
-const SEQUENCE = ['inhale', 'hold', 'exhale', 'relax'];
 
 const DEFAULT_STEPS = [
   {
@@ -79,150 +77,274 @@ export const MindfulMonstersActivity = ({
   const [completedRounds, setCompletedRounds] = useState(0);
   const [isFinishing, setIsFinishing] = useState(false);
 
-  // ---------------------------------------------------------
-  // GUARANTEE EXACT BREATHING SEQUENCE
-  // Inhale -> Hold -> Exhale -> Relax
-  // ---------------------------------------------------------
+  const timerRef = useRef(null);
+  const sessionRef = useRef({
+    stepIndex: 0,
+    timer: 4,
+    rounds: 0,
+  });
 
-  const enforceStrictSequence = useCallback((rawSteps) => {
-    if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
-      return DEFAULT_STEPS;
-    }
-
-    return SEQUENCE.map((sequencePhase, index) => {
-      const found = rawSteps.find((step) => {
-        const phase = step?.phase?.toLowerCase();
-
-        return (
-          phase === sequencePhase ||
-          (sequencePhase === 'relax' && phase === 'rest')
-        );
-      });
-
-      if (found) {
-        return {
-          ...found,
-          phase: sequencePhase,
-          order: index + 1,
-        };
-      }
-
-      return DEFAULT_STEPS[index];
-    });
-  }, []);
+  const onProgressRef = useRef(onProgress);
 
   // ---------------------------------------------------------
-  // LOAD STEPS
+  // KEEP CALLBACK UPDATED
   // ---------------------------------------------------------
 
   useEffect(() => {
-    let isMounted = true;
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  // ---------------------------------------------------------
+  // LOAD API DATA
+  //
+  // API DATA IS ONLY USED FOR CONTENT.
+  // THE FRONTEND ALWAYS FORCES:
+  //
+  // 1 = INHALE
+  // 2 = HOLD
+  // 3 = EXHALE
+  // 4 = RELAX
+  // ---------------------------------------------------------
+
+  useEffect(() => {
+    let mounted = true;
 
     const loadSteps = async () => {
       try {
-        const res = await wellnessService.getMindfulMonsterSteps();
+        const response =
+          await wellnessService.getMindfulMonsterSteps();
 
-        if (!isMounted) {
+        if (!mounted) {
           return;
         }
 
         if (
-          res?.success &&
-          Array.isArray(res.steps) &&
-          res.steps.length > 0
+          response?.success &&
+          Array.isArray(response.steps) &&
+          response.steps.length > 0
         ) {
-          const cleanSteps = enforceStrictSequence(res.steps);
+          const apiSteps = response.steps;
 
-          setSteps(cleanSteps);
+          const getStep = (phase, fallback) => {
+            const found = apiSteps.find(
+              (item) =>
+                String(item?.phase || '').toLowerCase() === phase ||
+                (phase === 'relax' &&
+                  String(item?.phase || '').toLowerCase() === 'rest')
+            );
+
+            if (!found) {
+              return fallback;
+            }
+
+            return {
+              ...fallback,
+              ...found,
+              phase: phase,
+              order: fallback.order,
+              duration_seconds:
+                Number(found.duration_seconds) > 0
+                  ? Number(found.duration_seconds)
+                  : fallback.duration_seconds,
+            };
+          };
+
+          // ALWAYS BUILD THE FOUR STEPS IN THIS EXACT ORDER.
+          const fixedSteps = [
+            getStep('inhale', DEFAULT_STEPS[0]),
+            getStep('hold', DEFAULT_STEPS[1]),
+            getStep('exhale', DEFAULT_STEPS[2]),
+            getStep('relax', DEFAULT_STEPS[3]),
+          ];
+
+          setSteps(fixedSteps);
+
+          sessionRef.current = {
+            stepIndex: 0,
+            timer: fixedSteps[0].duration_seconds,
+            rounds: 0,
+          };
+
           setCurrentStepIndex(0);
-          setStepTimer(cleanSteps[0]?.duration_seconds || 4);
+          setStepTimer(fixedSteps[0].duration_seconds);
+          setCompletedRounds(0);
         } else {
           setSteps(DEFAULT_STEPS);
+
+          sessionRef.current = {
+            stepIndex: 0,
+            timer: DEFAULT_STEPS[0].duration_seconds,
+            rounds: 0,
+          };
+
           setCurrentStepIndex(0);
-          setStepTimer(DEFAULT_STEPS[0]?.duration_seconds || 4);
+          setStepTimer(DEFAULT_STEPS[0].duration_seconds);
+          setCompletedRounds(0);
         }
       } catch (error) {
         console.warn(
-          'Mindful Monsters steps could not be loaded. Using default steps.',
+          'Mindful Monsters steps could not be loaded. Using defaults.',
           error
         );
 
-        if (isMounted) {
-          setSteps(DEFAULT_STEPS);
-          setCurrentStepIndex(0);
-          setStepTimer(DEFAULT_STEPS[0]?.duration_seconds || 4);
+        if (!mounted) {
+          return;
         }
+
+        setSteps(DEFAULT_STEPS);
+
+        sessionRef.current = {
+          stepIndex: 0,
+          timer: DEFAULT_STEPS[0].duration_seconds,
+          rounds: 0,
+        };
+
+        setCurrentStepIndex(0);
+        setStepTimer(DEFAULT_STEPS[0].duration_seconds);
+        setCompletedRounds(0);
       }
     };
 
     loadSteps();
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
-  }, [enforceStrictSequence]);
+  }, []);
 
   // ---------------------------------------------------------
-  // COUNTDOWN TIMER
+  // THE ACTUAL BREATHING ENGINE
+  //
+  // IMPORTANT:
+  // THIS EFFECT DOES NOT DEPEND ON currentStepIndex,
+  // stepTimer, OR completedRounds.
+  //
+  // THEREFORE THE INTERVAL CANNOT RESTART WHEN A STEP CHANGES.
   // ---------------------------------------------------------
 
   useEffect(() => {
-    if (!isActive || steps.length === 0 || isFinishing) {
+    if (!isActive || isFinishing) {
       return undefined;
     }
 
-    const interval = setInterval(() => {
-      setStepTimer((previousTimer) => {
-        if (previousTimer > 1) {
-          return previousTimer - 1;
+    timerRef.current = setInterval(() => {
+      const session = sessionRef.current;
+
+      // -----------------------------------------------------
+      // COUNTDOWN
+      // -----------------------------------------------------
+
+      if (session.timer > 1) {
+        session.timer -= 1;
+
+        setStepTimer(session.timer);
+        return;
+      }
+
+      // -----------------------------------------------------
+      // CURRENT STEP HAS FINISHED
+      // -----------------------------------------------------
+
+      // STEP 1: INHALE -> STEP 2: HOLD
+      if (session.stepIndex === 0) {
+        session.stepIndex = 1;
+        session.timer =
+          steps[1]?.duration_seconds || 4;
+
+        setCurrentStepIndex(1);
+        setStepTimer(session.timer);
+
+        return;
+      }
+
+      // STEP 2: HOLD -> STEP 3: EXHALE
+      if (session.stepIndex === 1) {
+        session.stepIndex = 2;
+        session.timer =
+          steps[2]?.duration_seconds || 4;
+
+        setCurrentStepIndex(2);
+        setStepTimer(session.timer);
+
+        return;
+      }
+
+      // STEP 3: EXHALE -> STEP 4: RELAX
+      if (session.stepIndex === 2) {
+        session.stepIndex = 3;
+        session.timer =
+          steps[3]?.duration_seconds || 4;
+
+        setCurrentStepIndex(3);
+        setStepTimer(session.timer);
+
+        return;
+      }
+
+      // STEP 4: RELAX -> ROUND COMPLETE
+      if (session.stepIndex === 3) {
+        session.rounds += 1;
+
+        setCompletedRounds(session.rounds);
+
+        // Stop after required rounds.
+        if (session.rounds >= REQUIRED_ROUNDS) {
+          setIsActive(false);
+
+          session.timer =
+            steps[3]?.duration_seconds || 4;
+
+          setStepTimer(session.timer);
+
+          return;
         }
 
-        setCurrentStepIndex((previousIndex) => {
-          const nextIndex = (previousIndex + 1) % steps.length;
+        // If more rounds are ever required:
+        // STEP 4 -> STEP 1
+        session.stepIndex = 0;
+        session.timer =
+          steps[0]?.duration_seconds || 4;
 
-          if (nextIndex === 0) {
-            setCompletedRounds((previousRounds) => previousRounds + 1);
-          }
-
-          setStepTimer(
-            steps[nextIndex]?.duration_seconds || 4
-          );
-
-          return nextIndex;
-        });
-
-        return 0;
-      });
+        setCurrentStepIndex(0);
+        setStepTimer(session.timer);
+      }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [isActive, steps, isFinishing]);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isActive, isFinishing, steps]);
 
   // ---------------------------------------------------------
-  // REPORT PROGRESS
+  // PROGRESS
   // ---------------------------------------------------------
 
   useEffect(() => {
-    if (!onProgress || steps.length === 0 || isFinishing) {
+    if (isFinishing) {
       return;
     }
 
-    const totalUnits = REQUIRED_ROUNDS * steps.length;
+    const totalUnits = REQUIRED_ROUNDS * 4;
 
-    const completedUnits =
-      completedRounds * steps.length + currentStepIndex;
+    const completedUnits = Math.min(
+      totalUnits,
+      completedRounds * 4 + currentStepIndex
+    );
 
     const progress = Math.min(
       99,
       Math.round((completedUnits / totalUnits) * 100)
     );
 
-    onProgress(progress, 3);
+    if (onProgressRef.current) {
+      onProgressRef.current(progress, 3);
+    }
   }, [
-    completedRounds,
     currentStepIndex,
-    steps.length,
-    onProgress,
+    completedRounds,
     isFinishing,
   ]);
 
@@ -230,52 +352,40 @@ export const MindfulMonstersActivity = ({
   // ACTIVE STEP
   // ---------------------------------------------------------
 
-  const activeStep = steps[currentStepIndex] || steps[0];
+  const activeStep =
+    steps[currentStepIndex] || DEFAULT_STEPS[0];
 
   const phaseKey =
-    activeStep?.phase?.toLowerCase() || 'inhale';
+    String(activeStep?.phase || 'inhale').toLowerCase();
 
   const phaseConfig =
     PHASE_CONFIG[phaseKey] || PHASE_CONFIG.inhale;
 
   // ---------------------------------------------------------
-  // FINISH MODULE
+  // FINISH
   // ---------------------------------------------------------
 
   const handleFinish = async () => {
-    if (isFinishing || isSubmitting) {
-      return;
-    }
-
-    // User must complete at least one full breathing round.
-    if (completedRounds < REQUIRED_ROUNDS) {
+    if (
+      isFinishing ||
+      isSubmitting ||
+      completedRounds < REQUIRED_ROUNDS
+    ) {
       return;
     }
 
     setIsFinishing(true);
     setIsActive(false);
 
-    try {
-      // -----------------------------------------------------
-      // IMPORTANT:
-      // Progress is marked 100 BEFORE completion.
-      // -----------------------------------------------------
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
+    try {
       if (onProgress) {
         await onProgress(100, 3);
       }
-
-      // -----------------------------------------------------
-      // IMPORTANT:
-      // ModuleShell owns completion and XP.
-      //
-      // onComplete(score, feedback)
-      // -> ModuleShell.completeModule()
-      // -> backend awards XP
-      // -> progress becomes completed
-      //
-      // DO NOT call recordMindfulMonsterSession().
-      // -----------------------------------------------------
 
       if (onComplete) {
         await onComplete(
@@ -296,7 +406,7 @@ export const MindfulMonstersActivity = ({
   };
 
   // ---------------------------------------------------------
-  // RESET SESSION
+  // RESET
   // ---------------------------------------------------------
 
   const handleReset = () => {
@@ -305,42 +415,70 @@ export const MindfulMonstersActivity = ({
     }
 
     setIsActive(false);
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    const firstDuration =
+      steps[0]?.duration_seconds || 4;
+
+    sessionRef.current = {
+      stepIndex: 0,
+      timer: firstDuration,
+      rounds: 0,
+    };
+
     setCurrentStepIndex(0);
-    setStepTimer(steps[0]?.duration_seconds || 4);
+    setStepTimer(firstDuration);
     setCompletedRounds(0);
   };
 
   // ---------------------------------------------------------
-  // ANIMATION
+  // START
   // ---------------------------------------------------------
+
+  const handleStart = () => {
+    if (isLoading || completedRounds >= REQUIRED_ROUNDS) {
+      return;
+    }
+
+    // Make sure the session state and UI are synchronized.
+    sessionRef.current = {
+      stepIndex: currentStepIndex,
+      timer: stepTimer,
+      rounds: completedRounds,
+    };
+
+    setIsActive(true);
+  };
+
+  // ---------------------------------------------------------
+  // UI HELPERS
+  // ---------------------------------------------------------
+
+  const isLoading = isSubmitting || isFinishing;
+  const canFinish =
+    completedRounds >= REQUIRED_ROUNDS;
 
   const scaleClass =
     phaseKey === 'inhale'
       ? 'scale-125'
       : phaseKey === 'hold'
-      ? 'scale-110'
-      : phaseKey === 'exhale'
-      ? 'scale-90'
-      : 'scale-95';
-
-  const isLoading =
-    isSubmitting || isFinishing;
-
-  const canFinish =
-    completedRounds >= REQUIRED_ROUNDS;
+        ? 'scale-110'
+        : phaseKey === 'exhale'
+          ? 'scale-90'
+          : 'scale-95';
 
   // ---------------------------------------------------------
-  // UI
+  // RENDER
   // ---------------------------------------------------------
 
   return (
-    <div className="space-y-6 text-center select-none">
-
-      {/* -----------------------------------------------------
-          HEADER
-          ----------------------------------------------------- */}
-
-      <div className="mx-auto max-w-md space-y-1">
+    <div className="mx-auto max-w-md space-y-6 text-center select-none">
+      {/* HEADER */}
+      <div className="space-y-1">
         <h3 className="text-lg font-black text-slate-800">
           Mindful Monsters Breathing
         </h3>
@@ -351,10 +489,7 @@ export const MindfulMonstersActivity = ({
         </p>
       </div>
 
-      {/* -----------------------------------------------------
-          ANIMATED MONSTER
-          ----------------------------------------------------- */}
-
+      {/* MONSTER */}
       <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-full border-4 border-indigo-200/50 bg-indigo-50/60 shadow-inner">
         <div
           className={`flex h-52 w-52 flex-col items-center justify-center rounded-full bg-linear-to-br ${phaseConfig.color} shadow-xl transition-all duration-1000 ease-in-out ${
@@ -375,12 +510,9 @@ export const MindfulMonstersActivity = ({
         </div>
       </div>
 
-      {/* -----------------------------------------------------
-          STEP INFO
-          ----------------------------------------------------- */}
-
-      <div className="mx-auto max-w-md space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
+      {/* STEP INFORMATION */}
+      <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        {/* STEP DOTS */}
         <div className="flex items-center justify-center gap-2">
           {steps.map((step, index) => (
             <span
@@ -394,23 +526,28 @@ export const MindfulMonstersActivity = ({
           ))}
         </div>
 
+        {/* PHASE */}
         <div className="text-xs font-extrabold uppercase tracking-wider text-indigo-600">
-          Phase {currentStepIndex + 1} of {steps.length}:{' '}
+          Phase {currentStepIndex + 1} of 4:{' '}
           {phaseKey.toUpperCase()}
         </div>
 
+        {/* TITLE */}
         <h3 className="text-base font-extrabold text-slate-800">
           {activeStep?.title}
         </h3>
 
+        {/* INSTRUCTION */}
         <p className="text-xs leading-relaxed text-slate-600">
           {activeStep?.instruction}
         </p>
 
-        <div className="text-[10px] text-slate-400">
+        {/* ROUND */}
+        <div className="text-[10px] font-medium text-slate-400">
           Completed Rounds: {completedRounds}
         </div>
 
+        {/* COMPLETED */}
         {canFinish && (
           <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
             ✓ Full breathing round completed
@@ -418,20 +555,16 @@ export const MindfulMonstersActivity = ({
         )}
       </div>
 
-      {/* -----------------------------------------------------
-          CONTROLS
-          ----------------------------------------------------- */}
-
+      {/* CONTROLS */}
       <div className="flex flex-wrap justify-center gap-3">
-
         {!isActive ? (
           <button
             type="button"
-            disabled={isLoading}
-            onClick={() => setIsActive(true)}
-            className="rounded-2xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:opacity-50"
+            disabled={isLoading || canFinish}
+            onClick={handleStart}
+            className="cursor-pointer rounded-2xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {completedRounds > 0 || currentStepIndex > 0
+            {currentStepIndex > 0
               ? '▶ Resume Session'
               : '▶ Begin Guided Breathing'}
           </button>
@@ -440,7 +573,7 @@ export const MindfulMonstersActivity = ({
             type="button"
             disabled={isLoading}
             onClick={() => setIsActive(false)}
-            className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-amber-600 disabled:opacity-50"
+            className="cursor-pointer rounded-2xl bg-amber-500 px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             ⏸ Pause
           </button>
@@ -448,8 +581,8 @@ export const MindfulMonstersActivity = ({
 
         <button
           type="button"
-          onClick={handleFinish}
           disabled={!canFinish || isLoading}
+          onClick={handleFinish}
           className="cursor-pointer rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading
@@ -459,20 +592,17 @@ export const MindfulMonstersActivity = ({
 
         <button
           type="button"
-          onClick={handleReset}
           disabled={isLoading}
-          className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          onClick={handleReset}
+          className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           ↻ Reset
         </button>
       </div>
 
-      {/* -----------------------------------------------------
-          COMPLETION REQUIREMENT
-          ----------------------------------------------------- */}
-
+      {/* REQUIREMENT */}
       {!canFinish && !isLoading && (
-        <p className="mx-auto max-w-md text-[11px] font-medium text-slate-400">
+        <p className="text-[11px] font-medium text-slate-400">
           Complete all four phases — inhale, hold, exhale, and
           relax — before finishing the module.
         </p>

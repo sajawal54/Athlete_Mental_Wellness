@@ -30,7 +30,6 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       setLoading(true);
       setError(null);
 
-      // Step 1: Prompt AI to dynamically generate a new random sports leadership scenario in English
       const aiPrompt = `
         Generate a fresh, realistic sports locker room dilemma for a team captain/athlete in English.
         Return ONLY a JSON object with this exact structure:
@@ -59,11 +58,16 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       let parsed = null;
 
       if (typeof rawData === 'string') {
-        const cleanJson = rawData.substring(
-          rawData.indexOf('{'),
-          rawData.lastIndexOf('}') + 1
-        );
-        parsed = JSON.parse(cleanJson);
+        try {
+          const startIndex = rawData.indexOf('{');
+          const endIndex = rawData.lastIndexOf('}');
+          if (startIndex !== -1 && endIndex !== -1) {
+            const cleanJson = rawData.substring(startIndex, endIndex + 1);
+            parsed = JSON.parse(cleanJson);
+          }
+        } catch (parseErr) {
+          console.warn('Could not parse AI locker room scenario JSON:', parseErr);
+        }
       } else if (typeof rawData === 'object' && rawData !== null) {
         parsed = rawData;
       }
@@ -72,7 +76,6 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
         setScenarios([parsed]);
         setSelectedScenario(parsed);
       } else {
-        // Fall back to server service or default scenario
         const res = await wellnessService.getLockerRoomScenarios();
 
         if (res?.success && res?.scenarios?.length > 0) {
@@ -93,17 +96,26 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
   }, [defaultScenario]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchScenarios();
-    }, 0);
+    let isMounted = true;
 
-    return () => clearTimeout(timer);
+    const loadData = async () => {
+      if (isMounted) {
+        await fetchScenarios();
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [fetchScenarios]);
 
   const handleSelectScenario = (sc) => {
     setSelectedScenario(sc);
     setSelectedChoiceIndex(null);
     setEvalResult(null);
+    setError(null);
   };
 
   const activeScenario =
@@ -123,7 +135,6 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
 
       const chosenOption = activeScenario.choices[selectedChoiceIndex]?.text;
 
-      // Ask AI to evaluate the specific decision made by the athlete
       const evalPrompt = `
         Scenario: "${activeScenario.situation}"
         User Selected Option: "${chosenOption}"
@@ -151,17 +162,17 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
 
       if (typeof rawEval === 'string') {
         try {
-          const cleanJson = rawEval.substring(
-            rawEval.indexOf('{'),
-            rawEval.lastIndexOf('}') + 1
-          );
-          parsedEval = JSON.parse(cleanJson);
+          const startIndex = rawEval.indexOf('{');
+          const endIndex = rawEval.lastIndexOf('}');
+          if (startIndex !== -1 && endIndex !== -1) {
+            const cleanJson = rawEval.substring(startIndex, endIndex + 1);
+            parsedEval = JSON.parse(cleanJson);
+          }
         } catch {
           parsedEval = {
             score: selectedChoiceIndex === 0 ? 95 : 65,
             is_optimal: selectedChoiceIndex === 0,
-            evaluation:
-              'Your choice impacts overall team morale and focus before the game.'
+            evaluation: 'Your choice impacts overall team morale and focus before the game.'
           };
         }
       } else if (typeof rawEval === 'object' && rawEval !== null) {
@@ -183,7 +194,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       setEvalResult(finalResult);
 
       if (onProgress) {
-        onProgress(80, 3);
+        await onProgress(80, 3);
       }
     } catch (err) {
       console.error('Decision submission error:', err);
@@ -191,8 +202,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       setEvalResult({
         score: selectedChoiceIndex === 0 ? 95 : 70,
         is_optimal: selectedChoiceIndex === 0,
-        evaluation:
-          'This choice actively influences team dynamics and locker room atmosphere.',
+        evaluation: 'This choice actively influences team dynamics and locker room atmosphere.',
         correctIndex: activeScenario.correct_choice_index ?? 0
       });
     } finally {
@@ -200,23 +210,28 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
     }
   };
 
-  const handleFinish = () => {
-    if (onProgress) {
-      onProgress(100, 3);
-    }
+  const handleFinish = async () => {
+    try {
+      if (onProgress) {
+        await onProgress(100, 3);
+      }
 
-    if (onComplete) {
-      onComplete(
-        evalResult?.score || 90,
-        evalResult?.evaluation || 'Locker room scenario completed.'
-      );
+      if (onComplete) {
+        await onComplete(
+          evalResult?.score || 90,
+          evalResult?.evaluation || 'Locker room scenario completed.'
+        );
+      }
+    } catch (err) {
+      console.error('Finish activity error:', err);
+      setError('Could not complete activity. Please try again.');
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3 text-slate-500 font-semibold text-xs">
+      <div className="flex items-center justify-center py-12 select-none">
+        <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
           Generating dynamic locker room dilemma...
         </div>
@@ -225,23 +240,30 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
   }
 
   return (
-    <div className="space-y-5 text-slate-800 max-w-md mx-auto">
+    <div className="mx-auto max-w-md space-y-5 text-left text-slate-800 select-none">
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700 text-left">
-          ⚠️ {error}
+        <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+          <span>⚠️ {error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="font-bold text-rose-400 hover:text-rose-600"
+          >
+            ✕
+          </button>
         </div>
       )}
 
       {/* SCENARIO SELECTOR TABS & REFRESH */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
           {activeScenario?.title || 'Locker Room Activity'}
         </span>
 
         <button
           type="button"
           onClick={fetchScenarios}
-          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline transition"
+          className="cursor-pointer text-[11px] font-bold text-indigo-600 underline transition hover:text-indigo-800"
         >
           🔄 New AI Scenario
         </button>
@@ -255,7 +277,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
               key={scenario.id}
               type="button"
               onClick={() => handleSelectScenario(scenario)}
-              className={`rounded-xl px-3 py-1.5 text-[10px] font-bold border transition ${
+              className={`cursor-pointer rounded-xl border px-3 py-1.5 text-[10px] font-bold transition ${
                 activeScenario?.id === scenario.id
                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'
@@ -268,24 +290,24 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
       )}
 
       {activeScenario && (
-        <div className="space-y-4 text-left">
+        <div className="space-y-4">
           {/* SITUATION BRIEF */}
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-2">
+          <div className="space-y-2 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
                 Locker Room Situation
               </span>
 
-              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600">
                 {activeScenario.difficulty || 'Medium'}
               </span>
             </div>
 
-            <p className="text-xs leading-relaxed text-slate-800 font-medium">
+            <p className="text-xs font-medium leading-relaxed text-slate-800">
               {activeScenario.situation}
             </p>
 
-            <div className="text-xs font-extrabold text-indigo-950 pt-1">
+            <div className="pt-1 text-xs font-extrabold text-indigo-950">
               ❓ {activeScenario.question}
             </div>
           </div>
@@ -325,7 +347,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
                   type="button"
                   disabled={!!evalResult}
                   onClick={() => setSelectedChoiceIndex(idx)}
-                  className={`w-full text-left rounded-xl p-3 transition border flex items-start gap-2.5 ${borderBgStyles}`}
+                  className={`flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition ${borderBgStyles}`}
                 >
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
@@ -340,12 +362,12 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
                   </span>
 
                   <div className="flex-1">
-                    <span className="text-xs font-medium text-slate-800 leading-snug">
+                    <span className="text-xs font-medium leading-snug text-slate-800">
                       {text}
                     </span>
 
                     {evalResult && isCorrect && (
-                      <span className="block text-[10px] font-bold text-emerald-700 mt-0.5">
+                      <span className="mt-0.5 block text-[10px] font-bold text-emerald-700">
                         ✓ Optimal Choice
                       </span>
                     )}
@@ -366,7 +388,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
                   isSubmitting ||
                   selectedChoiceIndex === null
                 }
-                className="w-full rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition"
+                className="w-full cursor-pointer rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submittingChoice
                   ? 'Analyzing Decision Impact...'
@@ -377,7 +399,7 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
 
           {/* EVALUATION & FEEDBACK PANEL */}
           {evalResult && (
-            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 space-y-3">
+            <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black text-slate-800">
                   {evalResult.is_optimal
@@ -385,19 +407,19 @@ export const LockerRoomActivity = ({ onProgress, onComplete, isSubmitting }) => 
                     : '💡 Leadership Reflection'}
                 </h3>
 
-                <span className="text-sm font-black text-indigo-700 font-mono">
+                <span className="font-mono text-sm font-black text-indigo-700">
                   Score: {evalResult.score}/100
                 </span>
               </div>
 
-              <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-xl border border-indigo-100">
+              <p className="rounded-xl border border-indigo-100 bg-white p-3 text-xs font-medium leading-relaxed text-slate-700">
                 {evalResult.evaluation}
               </p>
 
               <button
                 type="button"
                 onClick={handleFinish}
-                className="w-full rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
+                className="w-full cursor-pointer rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-emerald-700"
               >
                 ✓ Claim XP & Finish Activity
               </button>

@@ -112,7 +112,7 @@ export const CareerForgeActivity = ({ onProgress, onComplete, isSubmitting }) =>
         setSavedSuccess(true);
         if (onProgress) onProgress(100, 3);
         
-        // FIX: Extract actual XP points returned by API response (or default to activity target XP)
+        // Extract actual XP points returned by API response (or default to activity target XP)
         const xpEarned = res?.xp_awarded ?? res?.data?.xp_awarded ?? 30;
 
         if (onComplete) {

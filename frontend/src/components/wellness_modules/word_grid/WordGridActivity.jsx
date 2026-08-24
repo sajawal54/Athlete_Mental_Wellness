@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { wellnessService } from '../../../services/wellnessServices/wellnessService';
 
-export const WordGridActivity = ({ onProgress, onComplete }) => {
+export const WordGridActivity = ({
+  onProgress,
+  onComplete,
+}) => {
   const [puzzle, setPuzzle] = useState(null);
   const [selectedCells, setSelectedCells] = useState([]);
   const [foundWords, setFoundWords] = useState(new Set());
@@ -11,9 +14,22 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const timerRef = useRef(null);
 
-  const fetchDailyPuzzle = useCallback(async () => {
+  const timerRef = useRef(null);
+  const hasFinishedRef = useRef(false);
+
+  const onProgressRef = useRef(onProgress);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  const fetchDailyPuzzle = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -24,30 +40,45 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
         setPuzzle(res.puzzle);
 
         if (res.user_score?.words_found) {
-          setFoundWords(new Set(res.user_score.words_found));
+          const initialFound = new Set(
+            res.user_score.words_found
+          );
+
+          setFoundWords(initialFound);
+
+          if (
+            res.puzzle.target_words &&
+            initialFound.size ===
+              res.puzzle.target_words.length
+          ) {
+            setIsPlaying(false);
+            hasFinishedRef.current = true;
+          }
         }
       }
 
-      const lbRes = await wellnessService.getWordGridLeaderboard();
+      const lbRes =
+        await wellnessService.getWordGridLeaderboard();
 
       if (lbRes?.success) {
         setLeaderboard(lbRes.leaderboard || []);
       }
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        err?.response?.data?.message ||
           'Failed to load daily Word Grid.'
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     let cancelled = false;
 
     const loadPuzzle = async () => {
       if (cancelled) return;
+
       await fetchDailyPuzzle();
     };
 
@@ -56,40 +87,129 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
     return () => {
       cancelled = true;
     };
-  }, [fetchDailyPuzzle]);
+  }, []);
 
   useEffect(() => {
     if (isPlaying) {
       timerRef.current = setInterval(() => {
-        setTimerSeconds((t) => t + 1);
+        setTimerSeconds((previous) => previous + 1);
       }, 1000);
     } else {
       clearInterval(timerRef.current);
     }
 
-    return () => clearInterval(timerRef.current);
+    return () => {
+      clearInterval(timerRef.current);
+    };
   }, [isPlaying]);
 
   const targetWords = puzzle?.target_words || [];
 
-  const handleCellClick = (r, c) => {
-    if (!puzzle || !isPlaying) return;
+  const handleFinishPuzzle = async (
+    finalWords,
+    currentPuzzle,
+    currentTimer
+  ) => {
+    if (
+      hasFinishedRef.current ||
+      !currentPuzzle
+    ) {
+      return;
+    }
+
+    hasFinishedRef.current = true;
+    setIsPlaying(false);
+
+    const wordsArr = Array.from(finalWords || foundWords);
+
+    const score = Math.max(
+      100,
+      wordsArr.length * 50 -
+        Math.floor(currentTimer / 5)
+    );
+
+    try {
+      const res =
+        await wellnessService.submitWordGridScore(
+          currentPuzzle.id,
+          wordsArr,
+          currentTimer,
+          score
+        );
+
+      if (res?.success) {
+        const xpEarned =
+          res?.xp_awarded ??
+          res?.data?.xp_awarded ??
+          25;
+
+        setScoreResult({
+          score,
+          time: currentTimer,
+          xpEarned,
+        });
+
+        if (onCompleteRef.current) {
+          await onCompleteRef.current(
+            xpEarned,
+            `Solved Word Grid in ${currentTimer}s! (Score: ${score})`
+          );
+        }
+      }
+    } catch (err) {
+      console.error(
+        'Word Grid submission error:',
+        err
+      );
+
+      if (onCompleteRef.current) {
+        await onCompleteRef.current(
+          25,
+          `Solved Word Grid in ${currentTimer}s!`
+        );
+      }
+    }
+  };
+
+  const handleCellClick = (row, col) => {
+    if (
+      !puzzle ||
+      !isPlaying ||
+      hasFinishedRef.current
+    ) {
+      return;
+    }
 
     let newSelection;
 
-    if (selectedCells.some(([row, col]) => row === r && col === c)) {
+    const alreadySelected = selectedCells.some(
+      ([selectedRow, selectedCol]) =>
+        selectedRow === row &&
+        selectedCol === col
+    );
+
+    if (alreadySelected) {
       newSelection = selectedCells.filter(
-        ([row, col]) => !(row === r && col === c)
+        ([selectedRow, selectedCol]) =>
+          !(
+            selectedRow === row &&
+            selectedCol === col
+          )
       );
     } else {
-      newSelection = [...selectedCells, [r, c]];
+      newSelection = [
+        ...selectedCells,
+        [row, col],
+      ];
     }
 
     setSelectedCells(newSelection);
 
-    // Check if current letters form any target word
     const formedWord = newSelection
-      .map(([row, col]) => puzzle.grid[row][col])
+      .map(
+        ([selectedRow, selectedCol]) =>
+          puzzle.grid[selectedRow][selectedCol]
+      )
       .join('')
       .toUpperCase();
 
@@ -99,81 +219,53 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
       .join('');
 
     const matchedTarget = targetWords.find(
-      (w) =>
-        w.word.toUpperCase() === formedWord ||
-        w.word.toUpperCase() === reverseWord
+      (item) =>
+        item.word.toUpperCase() === formedWord ||
+        item.word.toUpperCase() === reverseWord
     );
 
     if (
       matchedTarget &&
-      !foundWords.has(matchedTarget.word.toUpperCase())
+      !foundWords.has(
+        matchedTarget.word.toUpperCase()
+      )
     ) {
-      const updatedFound = new Set(foundWords).add(
+      const updatedFound = new Set(
+        foundWords
+      );
+
+      updatedFound.add(
         matchedTarget.word.toUpperCase()
       );
 
       setFoundWords(updatedFound);
       setSelectedCells([]);
 
-      const prog = Math.min(
-        100,
-        Math.round(
-          (updatedFound.size / targetWords.length) * 100
-        )
-      );
+      const progress =
+        targetWords.length > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (updatedFound.size /
+                  targetWords.length) *
+                  100
+              )
+            )
+          : 0;
 
-      if (onProgress) {
-        onProgress(prog, 3);
+      if (onProgressRef.current) {
+        onProgressRef.current(progress, 3);
       }
 
-      if (updatedFound.size === targetWords.length) {
-        handleFinishPuzzle(updatedFound);
-      }
-    }
-  };
-
-  const handleFinishPuzzle = async (finalWords) => {
-    setIsPlaying(false);
-
-    const wordsArr = Array.from(finalWords || foundWords);
-
-    const score = Math.max(
-      100,
-      wordsArr.length * 50 - Math.floor(timerSeconds / 5)
-    );
-
-    try {
-      const res = await wellnessService.submitWordGridScore(
-        puzzle.id,
-        wordsArr,
-        timerSeconds,
-        score
-      );
-
-      if (res?.success) {
-        // FIX: Extract actual XP earned from response or fallback to 25
-        const xpEarned = res?.xp_awarded ?? res?.data?.xp_awarded ?? 25;
-
-        setScoreResult({
-          score,
-          time: timerSeconds,
-          xpEarned,
-        });
-
-        if (onComplete) {
-          // FIX: Pass xpEarned as first argument instead of game score points
-          onComplete(
-            xpEarned,
-            `Solved Word Grid in ${timerSeconds}s! (Score: ${score})`
-          );
-        }
-      }
-    } catch (err) {
-      console.error(err);
-
-      if (onComplete) {
-        // Fallback XP in case of error
-        onComplete(25, `Solved Word Grid in ${timerSeconds}s!`);
+      if (
+        targetWords.length > 0 &&
+        updatedFound.size === targetWords.length
+      ) {
+        handleFinishPuzzle(
+          updatedFound,
+          puzzle,
+          timerSeconds
+        );
       }
     }
   };
@@ -181,7 +273,7 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3 text-slate-500 font-semibold text-sm">
+        <div className="flex items-center gap-3 text-sm font-semibold text-slate-500">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
           Loading daily focus puzzle...
         </div>
@@ -192,59 +284,75 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
-          {error}
+        <div className="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
+          <span>⚠️ {error}</span>
+
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="cursor-pointer font-bold text-rose-500 hover:text-rose-700"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {/* PUZZLE HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
         <div>
           <h3 className="text-base font-extrabold text-slate-800">
             {puzzle?.title || 'Daily Word Grid'}
           </h3>
 
-          <span className="text-xs text-indigo-600 font-semibold">
+          <span className="text-xs font-semibold text-indigo-600">
             Theme: {puzzle?.theme}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-slate-100 px-3 py-1 text-xs font-mono font-bold text-slate-700">
+          <div className="rounded-xl bg-slate-100 px-3 py-1 font-mono text-xs font-bold text-slate-700">
             ⏱ {Math.floor(timerSeconds / 60)}:
-            {(timerSeconds % 60).toString().padStart(2, '0')}
+            {(timerSeconds % 60)
+              .toString()
+              .padStart(2, '0')}
           </div>
 
-          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-extrabold text-emerald-800">
-            {foundWords.size} / {targetWords.length} Words Found
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-800">
+            {foundWords.size} / {targetWords.length}{' '}
+            Words Found
           </span>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[1fr_260px]">
-        {/* INTERACTIVE 2D LETTER GRID */}
         <div className="flex justify-center p-2">
-          <div className="inline-grid gap-2 select-none bg-slate-100 p-4 rounded-3xl shadow-inner">
-            {puzzle?.grid?.map((row, rIdx) => (
+          <div className="inline-grid select-none gap-2 rounded-3xl bg-slate-100 p-4 shadow-inner">
+            {puzzle?.grid?.map((row, rowIndex) => (
               <div
-                key={rIdx}
-                className="flex gap-2 justify-center"
+                key={rowIndex}
+                className="flex justify-center gap-2"
               >
-                {row.map((letter, cIdx) => {
-                  const isSelected = selectedCells.some(
-                    ([r, c]) => r === rIdx && c === cIdx
-                  );
+                {row.map((letter, columnIndex) => {
+                  const isSelected =
+                    selectedCells.some(
+                      ([selectedRow, selectedCol]) =>
+                        selectedRow === rowIndex &&
+                        selectedCol === columnIndex
+                    );
 
                   return (
                     <button
-                      key={cIdx}
+                      key={columnIndex}
                       type="button"
                       onClick={() =>
-                        handleCellClick(rIdx, cIdx)
+                        handleCellClick(
+                          rowIndex,
+                          columnIndex
+                        )
                       }
-                      className={`h-11 w-11 sm:h-12 sm:w-12 rounded-2xl text-base sm:text-lg font-black transition transform active:scale-95 flex items-center justify-center font-mono ${
+                      disabled={!isPlaying}
+                      className={`flex h-11 w-11 transform cursor-pointer items-center justify-center rounded-2xl font-mono text-base font-black transition active:scale-95 sm:h-12 sm:w-12 sm:text-lg ${
                         isSelected
-                          ? 'bg-indigo-600 text-white shadow-md scale-105'
+                          ? 'scale-105 bg-indigo-600 text-white shadow-md'
                           : 'bg-white text-slate-800 shadow-xs hover:bg-indigo-50 hover:text-indigo-700'
                       }`}
                     >
@@ -257,31 +365,30 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
           </div>
         </div>
 
-        {/* TARGET WORDS CHECKLIST & LEADERBOARD */}
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
               Target Words
             </div>
 
             <div className="space-y-1.5">
-              {targetWords.map((item, idx) => {
+              {targetWords.map((item, index) => {
                 const isFound = foundWords.has(
                   item.word.toUpperCase()
                 );
 
                 return (
                   <div
-                    key={idx}
+                    key={item.word || index}
                     className={`flex items-center justify-between rounded-xl p-2 text-xs font-semibold transition ${
                       isFound
-                        ? 'bg-emerald-50 text-emerald-800 line-through opacity-75'
+                        ? 'bg-emerald-50 text-emerald-800 opacity-75 line-through'
                         : 'bg-slate-50 text-slate-700'
                     }`}
                   >
                     <span>{item.word}</span>
 
-                    <span className="text-[10px] text-slate-400 font-normal">
+                    <span className="text-[10px] font-normal text-slate-400">
                       {item.hint}
                     </span>
                   </div>
@@ -291,22 +398,22 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
           </div>
 
           {leaderboard.length > 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+            <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Daily Leaderboard
               </div>
 
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {leaderboard.map((item, idx) => (
+              <div className="max-h-32 space-y-1 overflow-y-auto">
+                {leaderboard.map((item, index) => (
                   <div
-                    key={item.id}
-                    className="flex justify-between text-xs py-1 border-b border-slate-50"
+                    key={item.id || index}
+                    className="flex justify-between border-b border-slate-50 py-1 text-xs"
                   >
                     <span className="font-semibold text-slate-700">
-                      #{idx + 1} {item.username}
+                      #{index + 1} {item.username}
                     </span>
 
-                    <span className="font-mono text-indigo-700 font-bold">
+                    <span className="font-mono font-bold text-indigo-700">
                       {item.score} pts
                     </span>
                   </div>
@@ -317,10 +424,9 @@ export const WordGridActivity = ({ onProgress, onComplete }) => {
         </div>
       </div>
 
-      {/* FINISH BUTTON OR RESULTS */}
       {foundWords.size > 0 &&
         foundWords.size === targetWords.length && (
-          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center text-xs font-extrabold text-emerald-900">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center text-xs font-extrabold text-emerald-900">
             🎉 All words located! Score:{' '}
             {scoreResult?.score || 300} pts recorded.
           </div>

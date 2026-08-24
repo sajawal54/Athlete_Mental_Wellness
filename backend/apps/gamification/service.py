@@ -25,10 +25,9 @@ def award_xp(user, amount, source, description=""):
 
         profile, _ = Profile.objects.get_or_create(user=user)
 
-        # Store previous level so we can detect level-up
+        
         previous_level = profile.level
 
-        # Add XP through Profile's existing logic
         profile.add_xp(amount)
         profile.refresh_from_db()
 
@@ -40,10 +39,10 @@ def award_xp(user, amount, source, description=""):
             description=description,
         )
 
-        # Check newly earned badges
+        
         new_badges = check_and_award_badges(user)
 
-        # Level-up notification
+      
         if profile.level > previous_level:
             create_level_notification(
                 user=user,

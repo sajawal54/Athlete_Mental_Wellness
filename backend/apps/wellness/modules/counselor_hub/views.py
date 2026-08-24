@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -11,6 +13,11 @@ from apps.wellness.models import (
 from apps.wellness.modules.counselor_hub.serializers import (
     CounselorRequestSerializer,
     CounselorSerializer,
+)
+
+from apps.wellness.services import (
+    complete_module,
+    get_module_by_slug,
 )
 
 
@@ -56,7 +63,7 @@ def counselor_list_view(request):
 def counselor_request_create_view(request):
     """
     Creates a counselor request for the
-    authenticated user.
+    authenticated user and completes the module / awards XP.
     """
 
     serializer = CounselorRequestSerializer(
@@ -91,16 +98,39 @@ def counselor_request_create_view(request):
         user=request.user
     )
 
+    # ---------------------------------------------------------
+    # MODULE COMPLETION & XP AWARD INTEGRATION
+    # ---------------------------------------------------------
+    module = get_module_by_slug("counselor-hub")
+    if not module:
+        module = get_module_by_slug("counselor_hub")
+
+    xp_awarded = 0
+    if module:
+        result = complete_module(
+            user=request.user,
+            module=module,
+            score=100,
+        )
+        xp_awarded = int(
+            result.get("xp_awarded") 
+            or module.xp_reward 
+            or 0
+        )
+    else:
+        xp_awarded = 10  # Fallback XP if module lookup fails
+
     return Response(
         {
             "success": True,
             "message": (
-                "Counselor request submitted. "
+                f"Counselor request submitted successfully. You earned {xp_awarded} XP! "
                 "The team will follow up shortly."
             ),
             "request": CounselorRequestSerializer(
                 req
             ).data,
+            "xp_awarded": xp_awarded,
         },
         status=status.HTTP_201_CREATED,
     )

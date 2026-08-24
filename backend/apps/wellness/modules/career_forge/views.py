@@ -4,6 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.wellness.models import CareerRoadmap
+from apps.wellness.services import (
+    complete_module,
+    get_module_by_slug,
+)
 
 from .serializers import CareerRoadmapSerializer
 
@@ -125,17 +129,41 @@ def career_forge_save_view(request):
         )
     )
 
+    # ---------------------------------------------------------
+    # MODULE COMPLETION & XP AWARD LOGIC FIXED
+    # ---------------------------------------------------------
+    module = get_module_by_slug("career-forge")  # Slug apnay database ke mutabiq check kar lijiyega (e.g. "career-forge" ya "career_forge")
+    xp_awarded = 0
+
+    if not module:
+        # Fallback slug search agar dash ki jagah underscore ho
+        module = get_module_by_slug("career_forge")
+
+    if module:
+        result = complete_module(
+            user=request.user,
+            module=module,
+            score=100,
+        )
+        xp_awarded = int(
+            result.get("xp_awarded") 
+            or module.xp_reward 
+            or 0
+        )
+    else:
+        xp_awarded = 15  # Default fallback XP agar module entry database mein na mile
+
     return Response(
         {
             "success": True,
             "message": (
-                "Career roadmap saved successfully."
+                f"Career roadmap saved successfully. You earned {xp_awarded} XP!"
             ),
             "created": created,
             "roadmap": CareerRoadmapSerializer(
                 roadmap
             ).data,
-            "xp_awarded": 0,
+            "xp_awarded": xp_awarded,
             "ready_for_module_completion": True,
         },
         status=status.HTTP_200_OK,

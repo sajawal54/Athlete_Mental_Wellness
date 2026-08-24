@@ -22,7 +22,7 @@ class NotificationListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Delete read notifications older than 1 day
+      
         one_day_ago = timezone.now() - timedelta(days=1)
 
         Notification.objects.filter(

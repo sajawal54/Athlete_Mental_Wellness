@@ -288,9 +288,9 @@ Incorporate active rest, deload training weeks, proper caloric surplus, and rest
 ];
 
 export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
-  const [categories, setCategories] = useState([]);
-  const [selectedLesson, setSelectedLesson] = useState(null);
-  const [userXp, setUserXp] = useState(0);
+  const [categories, setCategories] = useState(EXTENDED_CATEGORIES);
+  const [selectedLesson, setSelectedLesson] = useState(EXTENDED_CATEGORIES[0]?.lessons[0] || null);
+  const [userXp, setUserXp] = useState(120);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -307,30 +307,25 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
         wellnessService.getMyProgress().catch(() => null),
       ]);
 
-      // Use backend data if available, otherwise fallback to local rich content
       const loadedCategories = data?.success && data.categories?.length > 0 ? data.categories : EXTENDED_CATEGORIES;
       setCategories(loadedCategories);
 
-      if (loadedCategories?.[0]?.lessons?.[0]) {
+      if (loadedCategories?.[0]?.lessons?.[0] && !selectedLesson) {
         setSelectedLesson(loadedCategories[0].lessons[0]);
       }
 
-      if (progressData?.progress) {
-        const total = progressData.progress.reduce((acc, p) => acc + (p.progress >= 100 ? 25 : 0), 50);
-        setUserXp(total);
-      } else {
-        setUserXp(120); // Default balance for testing
+      if (progressData?.total_xp !== undefined) {
+        setUserXp(progressData.total_xp);
+      } else if (progressData?.xp !== undefined) {
+        setUserXp(progressData.xp);
       }
     } catch (err) {
       console.error('Error fetching codex categories:', err);
       setCategories(EXTENDED_CATEGORIES);
-      if (EXTENDED_CATEGORIES[0]?.lessons?.[0]) {
-        setSelectedLesson(EXTENDED_CATEGORIES[0].lessons[0]);
-      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedLesson]);
 
   useEffect(() => {
     let isMounted = true;
@@ -362,14 +357,21 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
   const handleCompleteLesson = async (lesson) => {
     try {
       setActionLoading(true);
+      setError(null);
+      
       const res = await wellnessService.completeCodexLesson(lesson.id).catch(() => ({ success: true }));
-      if (res?.success) {
+      
+      if (res?.success !== false) {
         setCompletedLessonIds((prev) => new Set(prev).add(lesson.id));
+        
+        // FIX: Ensure parent component gets proper completion and XP info
+        const earnedXp = lesson.xp_reward || res?.xp_awarded || 20;
+        
         if (onProgress) onProgress(100, 3);
-        if (onComplete) onComplete(100, `Completed lesson: ${lesson.title}`);
+        if (onComplete) onComplete(earnedXp, `Completed lesson: ${lesson.title}`);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to record lesson progress.');
+      setError(err?.response?.data?.message || err?.message || 'Failed to record lesson progress.');
     } finally {
       setActionLoading(false);
     }
@@ -409,7 +411,7 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
 
       {/* UNLOCK CONFIRMATION MODAL */}
       {unlockModalLesson && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-3 animate-fadeIn">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-extrabold text-amber-900 flex items-center gap-2">
               <span>🔒</span> Unlock Lesson: {unlockModalLesson.title}
@@ -444,7 +446,9 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
       <div className="grid gap-6 md:grid-cols-[300px_1fr]">
         {/* CATEGORY & LESSONS LIST */}
         <div className="space-y-4 max-h-150 overflow-y-auto pr-1">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Categories & Lessons ({categories.reduce((acc, c) => acc + (c.lessons?.length || 0), 0)})</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Categories & Lessons ({categories.reduce((acc, c) => acc + (c.lessons?.length || 0), 0)})
+          </h3>
           <div className="space-y-3">
             {categories.map((cat) => (
               <div key={cat.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
@@ -458,6 +462,7 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
                     return (
                       <button
                         key={lesson.id}
+                        type="button"
                         onClick={() => handleSelectLesson(lesson)}
                         className={`w-full text-left rounded-xl p-2.5 text-xs font-semibold transition flex items-center justify-between gap-2 ${
                           isSelected
@@ -506,6 +511,7 @@ export const CodexActivity = ({ onProgress, onComplete, isSubmitting }) => {
 
               <div className="border-t border-slate-100 pt-4 flex justify-end">
                 <button
+                  type="button"
                   onClick={() => handleCompleteLesson(selectedLesson)}
                   disabled={actionLoading || isSubmitting || completedLessonIds.has(selectedLesson.id)}
                   className="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition"

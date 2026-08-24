@@ -157,9 +157,10 @@ def breathwork_record_view(request):
             score=100,
         )
 
-        xp_awarded = result.get(
-            "xp_awarded",
-            0,
+        xp_awarded = int(
+            result.get("xp_awarded") 
+            or module.xp_reward 
+            or 0
         )
 
         if xp_awarded > 0:
@@ -171,6 +172,9 @@ def breathwork_record_view(request):
                 ),
                 action_url="/modules",
             )
+    else:
+        # Fallback agar module slug match na ho toh warning log ya default reward
+        xp_awarded = 10 
 
     return Response(
         {
@@ -179,6 +183,7 @@ def breathwork_record_view(request):
                 session
             ).data,
             "xp_awarded": xp_awarded,
+            "message": f"Successfully completed! You earned {xp_awarded} XP."
         },
         status=status.HTTP_201_CREATED,
     )

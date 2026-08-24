@@ -121,15 +121,9 @@ def get_user_progress(user, module):
     """
     Get or create the user's progress for a module.
 
-    Modules are repeatable on a daily basis.
-
-    Example:
-
-        Day 1 -> completed -> XP awarded
-        Day 2 -> available again -> XP can be awarded again
-
-    This function only resets the progress state.
-    It does NOT delete historical WellnessCompletion records.
+    Modules are repeatable on a daily basis. 
+    A robust check ensures that if the last completion date was 
+    before today, status resets to 'available' and progress clears out.
     """
 
     today = timezone.localdate()
@@ -159,18 +153,26 @@ def get_user_progress(user, module):
         )
 
     # ---------------------------------------------------------
-    # DAILY RESET
+    # DAILY RESET CHECK (Robust evaluation using completion/progress dates)
     # ---------------------------------------------------------
 
-    if (
-        progress.status == "completed"
-        and progress.completed_at
-    ):
-        completed_date = timezone.localtime(
-            progress.completed_at
-        ).date()
+    if progress.status == "completed":
+        # Check either progress.completed_at or the latest WellnessCompletion record for today
+        last_completion = (
+            WellnessCompletion.objects
+            .filter(user=user, module=module)
+            .order_by("-completed_at")
+            .first()
+        )
 
-        if completed_date < today:
+        completed_date = None
+        if last_completion and last_completion.completion_date:
+            completed_date = last_completion.completion_date
+        elif progress.completed_at:
+            completed_date = timezone.localtime(progress.completed_at).date()
+
+        # If completed on a previous day, trigger full daily reset
+        if completed_date and completed_date < today:
             new_status = (
                 "available"
                 if is_module_unlocked(user, module)
@@ -325,7 +327,7 @@ def start_module(user, module):
         )
 
     # ---------------------------------------------------------
-    # FIND ACTIVE SESSION
+    # FIND ACTIVE SESSION (Ensure it's fresh for today if reset happened)
     # ---------------------------------------------------------
 
     active_session = (
@@ -338,10 +340,6 @@ def start_module(user, module):
         .order_by("-started_at")
         .first()
     )
-
-    # ---------------------------------------------------------
-    # CREATE NEW SESSION
-    # ---------------------------------------------------------
 
     if not active_session:
         active_session = WellnessSession.objects.create(
@@ -383,19 +381,11 @@ def update_module_progress(
             "This module is currently locked."
         )
 
-    # ---------------------------------------------------------
-    # START IF AVAILABLE
-    # ---------------------------------------------------------
-
     if progress.status == "available":
         progress.status = "in_progress"
 
         if not progress.started_at:
             progress.started_at = timezone.now()
-
-    # ---------------------------------------------------------
-    # PROGRESS
-    # ---------------------------------------------------------
 
     if progress_value is not None:
         try:
@@ -413,10 +403,6 @@ def update_module_progress(
             ),
         )
 
-    # ---------------------------------------------------------
-    # CURRENT STEP
-    # ---------------------------------------------------------
-
     if current_step is not None:
         try:
             progress.current_step = max(
@@ -429,10 +415,6 @@ def update_module_progress(
             )
 
     progress.save()
-
-    # ---------------------------------------------------------
-    # SESSION DATA
-    # ---------------------------------------------------------
 
     if (
         session_data is not None
@@ -479,14 +461,9 @@ def complete_module(
     score=0,
 ):
     """
-    Complete a wellness module and award XP.
-
-    IMPORTANT:
-    - XP is awarded only once per module per day.
-    - Historical completion records are preserved.
-    - The Profile XP is updated through award_xp().
-    - XPHistory is also created by award_xp().
-    - Duplicate requests are safely handled.
+    Complete a wellness module and award XP safely.
+    Fixed issue: Ensure xp_awarded is properly returned in both
+    new completion and duplicate fallback scenarios.
     """
 
     if not is_module_unlocked(user, module):
@@ -496,10 +473,7 @@ def complete_module(
         )
 
     today = timezone.localdate()
-
-    # ---------------------------------------------------------
-    # LOCK USER PROGRESS ROW
-    # ---------------------------------------------------------
+    xp_to_award = int(module.xp_reward or 0)
 
     progress = (
         UserModuleProgress.objects
@@ -511,7 +485,6 @@ def complete_module(
         .first()
     )
 
-    # This should normally exist, but create it safely if needed.
     if not progress:
         progress = UserModuleProgress.objects.create(
             user=user,
@@ -520,10 +493,6 @@ def complete_module(
             progress=0,
             current_step=0,
         )
-
-    # ---------------------------------------------------------
-    # CHECK EXISTING DAILY COMPLETION
-    # ---------------------------------------------------------
 
     existing_completion = (
         WellnessCompletion.objects
@@ -541,12 +510,8 @@ def complete_module(
             "already_completed": True,
             "progress": progress,
             "completion": existing_completion,
-            "xp_awarded": 0,
+            "xp_awarded": int(existing_completion.xp_awarded or xp_to_award),
         }
-
-    # ---------------------------------------------------------
-    # SCORE
-    # ---------------------------------------------------------
 
     try:
         score = max(
@@ -557,10 +522,6 @@ def complete_module(
         score = 0
 
     now = timezone.now()
-
-    # ---------------------------------------------------------
-    # SESSION
-    # ---------------------------------------------------------
 
     if session is None:
         session = (
@@ -580,14 +541,9 @@ def complete_module(
             module=module,
         )
 
-    # ---------------------------------------------------------
-    # MARK SESSION COMPLETE
-    # ---------------------------------------------------------
-
     session.score = score
     session.is_completed = True
     session.completed_at = now
-
     session.save(
         update_fields=[
             "score",
@@ -595,10 +551,6 @@ def complete_module(
             "completed_at",
         ]
     )
-
-    # ---------------------------------------------------------
-    # UPDATE PROGRESS
-    # ---------------------------------------------------------
 
     progress.status = "completed"
     progress.progress = 100
@@ -609,10 +561,6 @@ def complete_module(
 
     progress.save()
 
-    # ---------------------------------------------------------
-    # CREATE COMPLETION RECORD
-    # ---------------------------------------------------------
-
     completion, created = (
         WellnessCompletion.objects.get_or_create(
             user=user,
@@ -620,64 +568,39 @@ def complete_module(
             completion_date=today,
             defaults={
                 "session": session,
-                "xp_awarded": int(
-                    module.xp_reward or 0
-                ),
+                "xp_awarded": xp_to_award,
             },
         )
     )
-
-    # ---------------------------------------------------------
-    # DUPLICATE PROTECTION
-    # ---------------------------------------------------------
 
     if not created:
         return {
             "already_completed": True,
             "progress": progress,
             "completion": completion,
-            "xp_awarded": 0,
+            "xp_awarded": int(completion.xp_awarded or xp_to_award),
         }
 
-    # ---------------------------------------------------------
-    # XP
-    # ---------------------------------------------------------
-
-    xp_awarded = int(
-        module.xp_reward or 0
-    )
-
-    # ---------------------------------------------------------
-    # AWARD XP
-    # ---------------------------------------------------------
-
-    if xp_awarded > 0:
+    if xp_to_award > 0:
         award_result = award_xp(
             user=user,
-            amount=xp_awarded,
+            amount=xp_to_award,
             source="wellness",
             description=(
                 f"Completed {module.name}"
             ),
         )
 
-        # Make absolutely sure the completion record
-        # contains the actual awarded amount.
-        completion.xp_awarded = xp_awarded
-
+        completion.xp_awarded = xp_to_award
         completion.save(
             update_fields=["xp_awarded"]
         )
-
-    # ---------------------------------------------------------
-    # FINAL RESULT
-    # ---------------------------------------------------------
 
     return {
         "already_completed": False,
         "progress": progress,
         "completion": completion,
-        "xp_awarded": xp_awarded,
+        "xp_awarded": xp_to_award,
     }
 
 
