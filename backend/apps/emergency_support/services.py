@@ -8,7 +8,6 @@ from .models import (
     BreathingExercise,
 )
 
-
 def get_emergency_contacts(region=None):
     """
     Return active emergency contacts.
@@ -64,9 +63,6 @@ def create_callback_request(
     urgency="normal",
     message="",
 ):
-    """
-    Create a new counselor callback request.
-    """
 
     callback_request = CallbackRequest.objects.create(
         user=user,

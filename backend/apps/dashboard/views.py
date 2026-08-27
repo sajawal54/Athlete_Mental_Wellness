@@ -1,4 +1,3 @@
-
 from django.utils import timezone
 
 from rest_framework.views import APIView
@@ -27,11 +26,8 @@ class DashboardOverviewAPIView(APIView):
             "username": user.username,
             "first_name": user.first_name,
             "name": user.get_full_name() or user.username,
-
-            # Backend is the single source of truth for XP
             "xp": profile.xp,
             "total_xp": profile.xp,
-
             "level": profile.level,
             "streak": profile.streak,
         }

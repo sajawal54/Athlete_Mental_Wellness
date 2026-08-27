@@ -1,6 +1,5 @@
 from .groq_service import ask_groq
 
-
 def get_bio_guide_response(
     user_message,
     conversation_history=None

@@ -8,7 +8,6 @@ from .models import (
     BreathingExercise,
 )
 
-
 class EmergencyContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmergencyContact

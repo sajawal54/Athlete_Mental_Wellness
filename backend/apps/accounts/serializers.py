@@ -6,7 +6,6 @@ from .models import Profile
 
 User = get_user_model()
 
-
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
@@ -34,7 +33,6 @@ class RegisterSerializer(serializers.ModelSerializer):
                 False
             ),
         )
-
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()

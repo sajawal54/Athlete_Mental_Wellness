@@ -47,13 +47,11 @@ class Profile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def add_xp(self, amount):
-        """XP add karta hai aur level auto update karta hai (Every 100000 XP)"""
         self.xp += amount
         self.level = (self.xp // 100000) + 1
         self.save()
 
     def update_streak(self, today_date):
-        """Daily check-in par streak badhata hai"""
         if self.last_checkin_date is None:
             self.streak = 1
         elif self.last_checkin_date == today_date:
@@ -65,7 +63,6 @@ class Profile(models.Model):
         
         self.last_checkin_date = today_date
         self.save()
-
     def __str__(self):
         return f"{self.user.username}'s Profile (Level {self.level} - {self.xp} XP)"
     

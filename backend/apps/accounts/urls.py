@@ -8,3 +8,4 @@ urlpatterns = [
    path('password-reset-confirm/', ResetPasswordAPIView.as_view(), name='password_reset_confirm'),
    path("profile/" , UserProfileAPIView.as_view() , name="user-profile"),
 ]
+

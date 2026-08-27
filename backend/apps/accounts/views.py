@@ -65,16 +65,10 @@ class UserProfileAPIView(APIView):
             user=request.user
         )
 
-        # =====================================================
-        # PASSWORD CHANGE
-        # =====================================================
-
         old_password = request.data.get("old_password")
         new_password = request.data.get("new_password")
 
         if new_password:
-
-            # Current password is mandatory.
             if not old_password:
                 return Response(
                     {
@@ -85,7 +79,6 @@ class UserProfileAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Verify current password.
             if not request.user.check_password(
                 old_password
             ):
@@ -98,7 +91,6 @@ class UserProfileAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Prevent same password.
             if old_password == new_password:
                 return Response(
                     {
@@ -110,11 +102,9 @@ class UserProfileAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Change password.
             request.user.set_password(new_password)
             request.user.save()
 
-            # Security notification.
             create_security_notification(
                 user=request.user,
                 title="Security Alert: Password Updated",
@@ -123,11 +113,6 @@ class UserProfileAPIView(APIView):
                     "successfully via profile settings."
                 ),
             )
-
-        # =====================================================
-        # PROFILE UPDATE
-        # =====================================================
-
         serializer = ProfileSerializer(
             profile,
             data=request.data,
@@ -168,14 +153,12 @@ class LoginAPIView(APIView):
 
         if serializer.is_valid():
             user = serializer.validated_data["user"]
-
             refresh = RefreshToken.for_user(user)
-
-            # Security notification on login.
+            
             create_security_notification(
                 user=user,
                 title="New Login Detected",
-                message=(
+                message=(                                                       
                     "Your account was logged in successfully."
                 ),
             )

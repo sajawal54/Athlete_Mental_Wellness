@@ -6,7 +6,6 @@ from rest_framework.views import APIView
 from apps.bio_guide.groq_service import ask_groq
 from rest_framework.pagination import PageNumberPagination
 
-
 class AffirmationPagination(PageNumberPagination):
     page_size = 2
     page_query_param = "page"

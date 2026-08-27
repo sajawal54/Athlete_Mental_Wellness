@@ -19,7 +19,6 @@ from .services import (
     get_user_callback_requests,
 )
 
-
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def emergency_contacts_view(request):
